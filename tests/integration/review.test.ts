@@ -317,7 +317,7 @@ describe("提交状态机（T06：pending → approved/rejected 均终态，重�
 describe("两票受理（顺序批准、任一驳回即终态）", () => {
   it("quorum=2：首票记票不生效，第二票凑满生效；同一管理员重复投票 409", async () => {
     await setAdminsExactly([admin1.id, admin2.id]);
-    const pageId = await perspectiveIdOf("意识形态", "编委会");
+    const pageId = await perspectiveIdOf("意识形态", "阿尔都塞");
 
     const created = await submitEdit(editor1, pageId, "意识形态：两票受理版。");
     expect(created.data.quorum).toBe(2);
@@ -347,7 +347,7 @@ describe("两票受理（顺序批准、任一驳回即终态）", () => {
 
   it("一准一驳 = 驳回终态：先投的批准票作废，内容不生效", async () => {
     await setAdminsExactly([admin1.id, admin2.id]);
-    const pageId = await perspectiveIdOf("意识形态", "编委会");
+    const pageId = await perspectiveIdOf("意识形态", "阿尔都塞");
     const before = await headContent(pageId);
 
     const created = await submitEdit(editor1, pageId, "一准一驳的版本。");
@@ -363,7 +363,7 @@ describe("两票受理（顺序批准、任一驳回即终态）", () => {
 
   it("准入：游客提交 401；编者审核 403；不存在的提交 404", async () => {
     await setAdminsExactly([admin1.id]);
-    const pageId = await perspectiveIdOf("意识形态", "编委会");
+    const pageId = await perspectiveIdOf("意识形态", "阿尔都塞");
 
     expect(
       (await submit({ kind: "edit", pageId, content: "x", baseRevisionId: 1 })).status,
@@ -375,7 +375,7 @@ describe("两票受理（顺序批准、任一驳回即终态）", () => {
 
   it("晋升为管理员的提交者不能受理自己的提交（403），他人可受理", async () => {
     await setAdminsExactly([admin1.id]);
-    const pageId = await perspectiveIdOf("意识形态", "编委会");
+    const pageId = await perspectiveIdOf("意识形态", "阿尔都塞");
     const created = await submitEdit(editor2, pageId, "等待自己被晋升的版本。");
     const id = created.data.submissionId as number;
 
@@ -391,7 +391,7 @@ describe("两票受理（顺序批准、任一驳回即终态）", () => {
 describe("冷启动退化与 quorum 快照（min(2, 管理员数)，创建时定格）", () => {
   it("恰一名管理员：quorum=1，单票即生效", async () => {
     await setAdminsExactly([admin1.id]);
-    const pageId = await perspectiveIdOf("异化", "编委会");
+    const pageId = await perspectiveIdOf("异化", "马克思");
 
     const created = await submitEdit(editor1, pageId, "冷启动单管理员版。");
     expect(created.data.quorum).toBe(1);
@@ -401,7 +401,7 @@ describe("冷启动退化与 quorum 快照（min(2, 管理员数)，创建时定
   });
 
   it("quorum 在提交创建时快照：之后管理员人数增减不追溯已存在的提交", async () => {
-    const pageId = await perspectiveIdOf("异化", "编委会");
+    const pageId = await perspectiveIdOf("异化", "马克思");
 
     // 提交时只有一名管理员（quorum=1）——之后增员，一票仍生效
     await setAdminsExactly([admin1.id]);
@@ -433,7 +433,7 @@ describe("冷启动退化与 quorum 快照（min(2, 管理员数)，创建时定
 describe("并发防护（base 过期自动驳回，ADR-0004 #2）", () => {
   it("页面 head 越过 base 后受理：自动驳回并提示基于新版重新提交", async () => {
     await setAdminsExactly([admin1.id]);
-    const pageId = await perspectiveIdOf("剩余价值", "编委会");
+    const pageId = await perspectiveIdOf("剩余价值", "马克思");
     const base = await headRevisionId(pageId);
 
     // 编者基于 r1 提交；随后管理员直编使页面前进到 r2
@@ -475,7 +475,7 @@ describe("并发防护（base 过期自动驳回，ADR-0004 #2）", () => {
 
   it("base 未过期（head == base）时正常通过", async () => {
     await setAdminsExactly([admin1.id]);
-    const pageId = await perspectiveIdOf("剩余价值", "编委会");
+    const pageId = await perspectiveIdOf("剩余价值", "马克思");
     const created = await submitEdit(editor1, pageId, "base 未过期的正常受理。");
     const outcome = await review(created.data.submissionId, { action: "approve" }, admin1.cookie);
     expect(outcome.data).toEqual({ outcome: "approved" });
@@ -485,7 +485,7 @@ describe("并发防护（base 过期自动驳回，ADR-0004 #2）", () => {
 describe("管理员直编（不经队列，与受理共用修订管线）", () => {
   it("同一端点：管理员提交直接生效，返回阅读地址并追加修订", async () => {
     await setAdminsExactly([admin1.id]);
-    const pageId = await perspectiveIdOf("价值", "编委会");
+    const pageId = await perspectiveIdOf("价值", "马克思");
     const before = await history(pageId);
 
     const result = await submitEdit(admin1, pageId, "管理员直编的通俗视角。");

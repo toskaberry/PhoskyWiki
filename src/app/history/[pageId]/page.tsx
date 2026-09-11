@@ -1,3 +1,4 @@
+import { hasAdminRole } from "@/lib/roles";
 import { formatKeyTexts } from "@/lib/key-texts";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -19,7 +20,7 @@ export default async function HistoryPage({ params, searchParams }: {
   searchParams: Promise<{ from?: string | string[]; to?: string | string[] }>;
 }) {
   const user = await getSessionUser();
-  const isAdmin = user?.role === "admin";
+  const isAdmin = hasAdminRole(user?.role);
   const query = await searchParams;
   let history;
   let comparison;

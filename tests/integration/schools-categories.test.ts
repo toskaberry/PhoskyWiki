@@ -86,12 +86,12 @@ describe("种子与学派轴读路径（T03 验收：≥2 学派，成员与核�
     expect(frankfurt.every((t) => t.perspectiveCount === 1)).toBe(true);
   });
 
-  it("诠释者所属学派：拉康→精神分析；编委会无学派", async () => {
+  it("诠释者所属学派：拉康→精神分析；马克思无学派", async () => {
     const lacanSchools = await listSchoolsOfInterpreter(await pageIdByTitle("拉康"));
     expect(lacanSchools.map((s) => s.title)).toEqual(["精神分析"]);
 
-    const boardSchools = await listSchoolsOfInterpreter(await pageIdByTitle("编委会"));
-    expect(boardSchools).toEqual([]);
+    const marxSchools = await listSchoolsOfInterpreter(await pageIdByTitle("马克思"));
+    expect(marxSchools).toEqual([]);
   });
 
   it("软删除成员或词条后，学派的派生计数随之收缩，恢复后回归", async () => {

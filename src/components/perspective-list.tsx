@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
-import { PinControl } from "@/components/pin-control";
 import { reorderPerspectivesByInterest } from "@/lib/interest-tags";
 
 export interface PerspectiveListProps {
@@ -14,12 +13,8 @@ export interface PerspectiveListProps {
     interpreterId: number;
     interpreterName: string;
     interpreterHref: string;
-    /** 编者置顶（管理员标记）：显示置顶徽标 */
-    pinned?: boolean;
     linkCount: number;
   }[];
-  /** 管理员登录时渲染每条的置顶开关（T04 置顶 × T05 角色） */
-  isAdmin?: boolean;
   /**
    * 服务端（登录态）兴趣重排用的诠释者 id 集：items 已按它排好，这里幂等地
    * 再排一次即可；游客和账号均由发现模块提供经过有效对象过滤与学派展开的集合。
@@ -30,11 +25,11 @@ export interface PerspectiveListProps {
 // 词条页视角列表默认露出条数（spec：默认露 5~8 条 + 展开全部）
 const DEFAULT_VISIBLE = 5;
 
-export function PerspectiveList({ items, isAdmin, interestInterpreterIds = null }: PerspectiveListProps) {
+export function PerspectiveList({ items, interestInterpreterIds = null }: PerspectiveListProps) {
   const [expanded, setExpanded] = useState(false);
   const interestedIds = interestInterpreterIds;
 
-  // 编委会 → 置顶 → 兴趣诠释者 → 其余；组内保持传入序（服务端已按热度排好）
+  // 兴趣诠释者 → 其余；组内保持传入序（服务端已按热度排好）
   const ordered = useMemo(() => {
     if (!interestedIds || interestedIds.length === 0) return items;
     return reorderPerspectivesByInterest(items, new Set(interestedIds));
@@ -60,14 +55,6 @@ export function PerspectiveList({ items, isAdmin, interestInterpreterIds = null 
               <Link href={item.href} className="font-medium hover:underline">
                 {item.title}
               </Link>
-              {item.pinned && (
-                <span
-                  data-testid="pin-badge"
-                  className="ml-1.5 rounded bg-secondary px-1.5 py-0.5 text-xs"
-                >
-                  置顶
-                </span>
-              )}
               <span className="ml-2 text-sm text-muted-foreground">
                 <Link
                   href={item.interpreterHref}
@@ -84,7 +71,6 @@ export function PerspectiveList({ items, isAdmin, interestInterpreterIds = null 
               >
                 {item.linkCount} 次引用
               </span>
-              {isAdmin && <PinControl pageId={item.pageId} pinned={!!item.pinned} />}
             </div>
           </li>
         ))}

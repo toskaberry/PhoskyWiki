@@ -63,7 +63,7 @@ test("build uses original paragraphs and verification rejects a modified quotati
     assert.match(payloads[0].content, /> 原文<!-- -->\*\*强调\*\*<!-- -->。/);
     assert.match(payloads[0].content, /§82及说明（只记录，不扩摘）/);
     assert.equal(payloads[1].content, "");
-    assert.equal(payloads[1].boardContent, "");
+    assert.equal(payloads.some(payload => "boardContent" in payload), false);
     assert.equal(run("verify", "--plan", plan).status, 0);
     const draft = join(dir, "drafts", "c01.md");
     writeFileSync(draft, readFileSync(draft, "utf8").replace("原文<!-- -->**强调**<!-- -->。", "原文已改。"));

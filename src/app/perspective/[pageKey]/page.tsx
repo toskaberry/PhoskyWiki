@@ -94,9 +94,6 @@ export default async function PerspectivePage({ params }: Params) {
               <Link href={termHref} className="underline-offset-4 hover:underline">
                 {detail.termTitle}
               </Link>
-              {detail.isBoard && (
-                <span className="ml-2 rounded bg-secondary px-1.5 py-0.5">通俗视角</span>
-              )}
             </p>
 
             <div className="mt-8">
@@ -138,9 +135,7 @@ export default async function PerspectivePage({ params }: Params) {
               },
               {
                 label: "生卒",
-                content: detail.isBoard
-                  ? "—（站方集体）"
-                  : formatYears(detail.interpreterBirthYear, detail.interpreterDeathYear),
+                content: formatYears(detail.interpreterBirthYear, detail.interpreterDeathYear),
               },
               { label: "正文双链", content: `${targets.size} 条（指向其他词条）` },
             ]}

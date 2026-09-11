@@ -35,8 +35,8 @@ function persp(interpreterId: number, extra: Partial<{ isBoard: boolean; pinned:
 
 describe("reorderPerspectivesByInterest（视角兴趣重排）", () => {
   const items = [
-    persp(1, { isBoard: true }), // 编委会：固定第一
-    persp(2), // 默认热度序：2 → 3 → 4 → 5
+    persp(1, { isBoard: true }), // 遗留标记不再具有排序特权
+    persp(2), // 输入保持默认热度序
     persp(3),
     persp(4),
     persp(5),
@@ -48,28 +48,28 @@ describe("reorderPerspectivesByInterest（视角兴趣重排）", () => {
 
   it("兴趣诠释者的视角排前；组内保持默认序，其余跟上", () => {
     const ordered = reorderPerspectivesByInterest(items, new Set([4]));
-    expect(ordered.map((item) => item.interpreterId)).toEqual([1, 4, 2, 3, 5]);
+    expect(ordered.map((item) => item.interpreterId)).toEqual([4, 1, 2, 3, 5]);
   });
 
   it("多个兴趣诠释者整体前置，组内相对顺序不变", () => {
     const ordered = reorderPerspectivesByInterest(items, new Set([5, 3]));
-    expect(ordered.map((item) => item.interpreterId)).toEqual([1, 3, 5, 2, 4]);
+    expect(ordered.map((item) => item.interpreterId)).toEqual([3, 5, 1, 2, 4]);
   });
 
-  it("编委会通俗视角仍固定第一，即使不在兴趣内", () => {
+  it("旧特权字段不再影响兴趣排序", () => {
     const ordered = reorderPerspectivesByInterest(items, new Set([4, 5, 3, 2]));
-    expect(ordered[0].isBoard).toBe(true);
+    expect(ordered.map(item => item.interpreterId)).toEqual([2, 3, 4, 5, 1]);
   });
 
-  it("编者置顶优先于个人兴趣（编辑信号 > 兴趣重排）", () => {
+  it("旧置顶字段不再优先于个人兴趣", () => {
     const withPinned = [
       persp(1, { isBoard: true }),
-      persp(2, { pinned: true }), // 置顶但不在兴趣内
+      persp(2, { pinned: true }), // 遗留置顶字段不在兴趣内
       persp(3),
       persp(4),
     ];
     const ordered = reorderPerspectivesByInterest(withPinned, new Set([4]));
-    expect(ordered.map((item) => item.interpreterId)).toEqual([1, 2, 4, 3]);
+    expect(ordered.map((item) => item.interpreterId)).toEqual([4, 1, 2, 3]);
   });
 
   it("兴趣集里的 id 不在列表中时无副作用", () => {

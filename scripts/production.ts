@@ -32,10 +32,10 @@ async function readAdmins(path: string | undefined): Promise<InitialAdmin[]> {
 }
 
 async function main() {
-  const { positionals, values } = parseArgs({ allowPositionals: true, options: { target: { type: "string" }, credentials: { type: "string" }, search: { type: "string" }, environment: { type: "string" }, "user-id": { type: "string" }, email: { type: "string" } } });
+  const { positionals, values } = parseArgs({ allowPositionals: true, options: { target: { type: "string" }, credentials: { type: "string" }, search: { type: "string" }, environment: { type: "string" }, "user-id": { type: "string" }, name: { type: "string" }, email: { type: "string" } } });
   const command = positionals[0];
-  if (positionals.length !== 1 || !["verify", "migrate", "bootstrap", "reindex", "search-status", "recover-admin"].includes(command)) {
-    throw new Error("USAGE: ops:production verify|migrate|bootstrap|reindex|search-status|recover-admin --target host:port/database/user [--credentials file] [--search http://host:port/index]; recover-admin additionally requires --environment, --user-id and --email");
+  if (positionals.length !== 1 || !["verify", "migrate", "bootstrap", "reindex", "search-status", "recover-admin", "promote-first-superadmin"].includes(command)) {
+    throw new Error("USAGE: ops:production verify|migrate|bootstrap|reindex|search-status|recover-admin|promote-first-superadmin --target host:port/database/user [--credentials file] [--search http://host:port/index]; recover-admin additionally requires --environment, --user-id and --email; promote-first-superadmin requires --environment, --user-id and --name");
   }
   const url = new URL(required("DATABASE_URL"));
   if (!["postgres:", "postgresql:"].includes(url.protocol) || url.search || url.hash || !url.hostname || !url.username || !url.password || url.pathname.length < 2) {
@@ -47,6 +47,9 @@ async function main() {
   if (values.target !== target) throw new Error("TARGET_MISMATCH: --target must match host:port/database/user; no changes made");
   let admins: InitialAdmin[] = [];
   let recoveryPassword: unknown;
+  if (command === "promote-first-superadmin" && (!values.environment || values.environment !== required("PHOSKYWIKI_ENV") || !values["user-id"] || !values.name)) {
+    throw new Error("SUPERADMIN_CONFIG: matching --environment, --user-id and --name required");
+  }
   if (command === "recover-admin") {
     if (!values.environment || values.environment !== required("PHOSKYWIKI_ENV") || !values["user-id"] || !values.email || !values.credentials) throw new Error("RECOVERY_CONFIG: explicit matching environment, --user-id, --email and --credentials required");
     const info = await stat(values.credentials);
@@ -77,6 +80,10 @@ async function main() {
     let result: object = {};
     if (command === "migrate") await migrate(db, { migrationsFolder: "drizzle" });
     if (command === "bootstrap") result = await bootstrapProduction(db, admins);
+    if (command === "promote-first-superadmin") {
+      const { bootstrapSuperAdmin } = await import("../src/db/bootstrap-superadmin");
+      result = await bootstrapSuperAdmin(db, values["user-id"]!, values.name!);
+    }
     if (command === "recover-admin") {
       const { recoverAdministrator } = await import("../src/lib/access-grants");
       await recoverAdministrator(db, values["user-id"]!, values.email!, recoveryPassword);
@@ -103,7 +110,7 @@ main().catch((error: unknown) => {
   // Database/JSON/library errors may contain credentials or bound parameters.
   // Only our literal diagnostics are safe to emit.
   const message = error instanceof Error ? error.message : "";
-  const safe = /^(CONFIG_REQUIRED|CREDENTIAL_FILE|RECOVERY_CONFIG|RECOVERY_TARGET|ADMIN_CONFIG|ADMIN_CONFLICT|ADMIN_CREDENTIAL_CONFLICT|BOARD_CONFLICT|DATABASE_CONFIG|TARGET_MISMATCH|AUTH_CONFIG|SEARCH_TARGET_MISMATCH|USAGE):/.test(message);
+  const safe = /^(CONFIG_REQUIRED|CREDENTIAL_FILE|RECOVERY_CONFIG|RECOVERY_TARGET|SUPERADMIN_CONFIG|SUPERADMIN_TARGET|SUPERADMIN_EXISTS|ADMIN_CONFIG|ADMIN_CONFLICT|ADMIN_CREDENTIAL_CONFLICT|DATABASE_CONFIG|TARGET_MISMATCH|AUTH_CONFIG|SEARCH_TARGET_MISMATCH|USAGE):/.test(message);
   console.error(safe ? message : "OPERATION_FAILED: check target, protected configuration, database availability and migrations; no credentials logged");
   process.exitCode = 1;
 });

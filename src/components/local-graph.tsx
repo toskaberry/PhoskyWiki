@@ -4,11 +4,11 @@
 // 初始数据（1 跳）由服务端组件注入；切跳数时经只读端点 /api/graph/local 取数。
 // 画布之外附「邻居词条」链接列表——无 JS/读屏器可用的等价导航。
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
-import { GraphCanvas, ringPositions } from "@/components/graph-canvas";
+import { GraphCanvas } from "@/components/graph-canvas";
 import type { LocalGraphData } from "@/lib/graph-types";
 
 export function LocalGraph({
@@ -43,17 +43,6 @@ export function LocalGraph({
       setLoading(false);
     }
   }
-
-  // 跳数直接用服务端 BFS 结果（数据层已带 hopsById），客户端不再重算
-  const positions = useMemo(
-    () =>
-      ringPositions(
-        data.nodes,
-        data.rootId,
-        (id) => (id === data.rootId ? 0 : (data.hopsById[id] ?? data.hops)),
-      ),
-    [data],
-  );
 
   const neighbors = data.nodes
     .filter((n) => n.id !== data.rootId)
@@ -102,7 +91,7 @@ export function LocalGraph({
             <GraphCanvas
               data={data}
               height={360}
-              initialPositions={positions}
+              rootId={data.rootId}
               onNodeClick={(node) => router.push(node.url)}
               ariaLabel={`「${termTitle}」的 ${data.hops} 跳邻居网络图，节点可点击进入词条`}
             />

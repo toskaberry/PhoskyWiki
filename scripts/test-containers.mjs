@@ -165,13 +165,13 @@ volumes:
   }
   await login(admins[0]);
   const title = "生产首条词条";
-  const content = "## 通俗解读\n生产容器中创建的第一篇正文。";
-  const created = await page.request.post(`${origin}/api/submissions`, { data: { kind: "new_term", title, content } });
+  const summary = "生产容器中创建的第一个导航词条。";
+  const created = await page.request.post(`${origin}/api/submissions`, { data: { kind: "new_term", title, summary } });
   assert.equal(created.status(), 201);
   const term = await created.json();
   assert.equal(term.outcome, "direct");
   await page.goto(`${origin}${term.href}`);
-  assert((await page.locator("body").innerText()).includes("生产容器中创建的第一篇正文"));
+  assert((await page.locator("body").innerText()).includes(summary));
   const historyURL = `${origin}/api/pages/${term.pageId}/history`;
   const initialHistory = await (await page.request.get(historyURL)).json();
   assert.equal(initialHistory.revisions[0].source, "create");
@@ -205,12 +205,22 @@ volumes:
     await compose(["up", "-d", "--wait", "app", "proxy"]);
     for (const admin of admins) await login(admin);
     await page.goto(`${origin}${term.href}`);
-    assert((await page.locator("body").innerText()).includes("生产容器中创建的第一篇正文"));
+    assert((await page.locator("body").innerText()).includes("管理员直编后的简介"));
     assert.deepEqual(await (await page.request.get(historyURL)).json(), history);
     assert.equal(await compose(["exec", "-T", "postgres", "psql", "-U", "phosky", "-d", "phoskywiki_test", "-Atc", sql], undefined, true), metadata);
     assert.equal((await page.request.get(`${origin}/healthz`)).status(), 200);
     await recordMemory();
   }
+  await login(admins[0]);
+  const current = await (await page.request.get(`${origin}/api/auth/get-session`)).json();
+  const promoteArgs = ["promote-first-superadmin", "--environment", releaseSettings ? "test" : "production", "--user-id", current.user.id, "--name", admins[0].name];
+  await ops(...promoteArgs);
+  await ops(...promoteArgs);
+  await ops("bootstrap", "--credentials", "/run/secrets/admins.json");
+  await page.goto(`${origin}/profile`);
+  assert((await page.getByTestId("session-user").innerText()).includes("超级管理员"));
+  assert.equal((await page.request.get(`${origin}/api/admin/users`)).status(), 200);
+  report.superadminBootstrap = true;
   assert.deepEqual(failures, []);
   if (releaseSettings) {
     const { runReleaseScenarios } = await import('./test-release-scenarios.mjs');

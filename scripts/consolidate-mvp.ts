@@ -1,7 +1,7 @@
 import "dotenv/config";
 import { parseArgs } from "node:util";
 import { readFile, stat } from "node:fs/promises";
-import { getDb } from "../src/db";
+import { closeDatabases, getDb } from "../src/db";
 import { sql } from "drizzle-orm";
 import { consolidateMvp, mvpMergeGroups, type MergeGroup } from "../src/lib/consolidate-mvp";
 
@@ -20,9 +20,9 @@ async function main() {
   if (identity.rows[0]?.name !== values.database) throw new Error("数据库身份不匹配");
   return { target: { host: url.hostname, port: url.port || "5432", database: values.database }, ...await consolidateMvp(values.apply, groups) };
 }
-main().then(report => { process.stdout.write(JSON.stringify(report, null, 2) + "\n"); process.exit(0); }).catch(error => {
+main().then(report => { process.stdout.write(JSON.stringify(report, null, 2) + "\n"); process.exitCode = 0; }).catch(error => {
   // 不输出 Drizzle 包裹的 SQL 参数或内容正文。
   let cause = error;
   while (cause instanceof Error && cause.cause) cause = cause.cause;
-  process.stdout.write(JSON.stringify({ error: cause instanceof Error ? cause.message : "归并失败" }) + "\n"); process.exit(1);
-});
+  process.stdout.write(JSON.stringify({ error: cause instanceof Error ? cause.message : "归并失败" }) + "\n"); process.exitCode = 1;
+}).finally(closeDatabases);

@@ -16,7 +16,7 @@ test("可选作品信息框、诠释者编辑、讨论失效锚点与搜索回�
     const response = await page.request.post("/api/submissions", { data });
     expect(response.status()).toBe(201); return response.json();
   };
-  const term = await create({ kind: "new_term", title, content: "通俗正文" });
+  const term = await create({ kind: "new_term", title });
   await page.goto(term.href);
   await expect(page.getByText("关键文本", { exact: true })).toHaveCount(0);
   await page.getByRole("link", { name: "编辑词条信息", exact: true }).click();
@@ -69,15 +69,18 @@ test("归并后公开正文、讨论回复、分类和双链仍可阅读", async
   await page.request.post("/api/auth/sign-in/email", { data: { email: process.env.SEED_ADMIN_EMAIL, password: process.env.SEED_ADMIN_PASSWORD } });
   const title = `Merged ${randomUUID()}`;
   const create = async (data: object) => { const response = await page.request.post("/api/submissions", { data }); expect(response.status()).toBe(201); return response.json(); };
-  const a = await create({ kind: "new_term", title: `${title}（哲学）`, content: "哲学公开解释\n\n[哲学出处][ref]\n\n[ref]: https://example.org/philosophy" });
-  const b = await create({ kind: "new_term", title: `${title}（经济学）`, content: `经济学公开解释\n\n[经济出处][ref]\n\n[ref]: ${a.href}` });
+  const a = await create({ kind: "new_term", title: `${title}（哲学）` });
+  const shared = await create({ kind: "new_interpreter", title: `合并诠释者 ${title}` });
+  const sharedName = `合并诠释者 ${title}`;
+  const first = await create({ kind: "new_perspective", termId: a.pageId, interpreterId: shared.pageId, content: "哲学公开解释\n\n[哲学出处][ref]\n\n[ref]: https://example.org/philosophy" });
+  const b = await create({ kind: "new_term", title: `${title}（经济学）` });
+  const second = await create({ kind: "new_perspective", termId: b.pageId, interpreterId: shared.pageId, content: `经济学公开解释\n\n[经济出处][ref]\n\n[ref]: ${a.href}` });
   const thinker = await create({ kind: "new_interpreter", title: `独立诠释者 ${title}` });
   const unique = await create({ kind: "new_perspective", termId: b.pageId, interpreterId: thinker.pageId, content: "独立视角正文保留" });
-  const source = await create({ kind: "new_term", title: `Source ${title}`, content: `普通 [[${title}（经济学）]]，精确 [[${title}（经济学）|合并视角@编委会]]` });
-  const catalogue = await (await page.request.get("/api/editor/catalog")).json();
-  const boardHref = catalogue.targets.find((t: { key: string }) => t.key === `${title}（经济学）@编委会`).href;
-  const boardId = Number(boardHref.match(/(\d+)$/)[1]);
-  const floor = await (await page.request.post("/api/discussion/posts", { data: { termId: b.pageId, perspectiveId: boardId, content: "迁移公开楼层" } })).json();
+  const sourceTerm = await create({ kind: "new_term", title: `Source ${title}` });
+  const source = await create({ kind: "new_perspective", termId: sourceTerm.pageId, interpreterId: shared.pageId, content: `普通 [[${title}（经济学）]]，精确 [[${title}（经济学）|合并视角@${sharedName}]]` });
+  const sharedPerspectiveId = second.pageId;
+  const floor = await (await page.request.post("/api/discussion/posts", { data: { termId: b.pageId, perspectiveId: sharedPerspectiveId, content: "迁移公开楼层" } })).json();
   const reply = await (await page.request.post("/api/discussion/posts", { data: { termId: b.pageId, parentId: floor.id, content: "迁移公开回复" } })).json();
   const folder = await mkdtemp(join(tmpdir(), "phosky-browser-merge-"));
   await writeFile(join(folder, "groups.json"), JSON.stringify([{ title, sourceTitles: [`${title}（哲学）`, `${title}（经济学）`] }]));
@@ -86,6 +89,7 @@ test("归并后公开正文、讨论回复、分类和双链仍可阅读", async
   await promisify(execFile)(process.execPath, ["--conditions", "react-server", "--import", "tsx", "scripts/consolidate-mvp.ts", "--database", new URL(process.env.DATABASE_URL!).pathname.slice(1), "--groups", join(folder, "groups.json"), "--apply", "--backup", join(folder, "fixture.txt")], { env: { ...process.env, MEILI_HOST: "" } });
   await page.goto(`/term/${a.pageId}`);
   await expect(page.getByRole("heading", { level: 1, name: title })).toBeVisible();
+  await page.goto(first.href);
   await expect(page.locator(".wiki-content")).toContainText("哲学公开解释");
   await expect(page.locator(".wiki-content")).toContainText("经济学公开解释");
   await expect(page.locator(".wiki-content").getByRole("link", { name: "哲学出处", exact: true })).toHaveAttribute("href", "https://example.org/philosophy");
@@ -94,7 +98,7 @@ test("归并后公开正文、讨论回复、分类和双链仍可阅读", async
   await page.getByRole("link", { name: /讨论区（/ }).click();
   await expect(page.locator(`#floor-${floor.id}`)).toContainText("迁移公开楼层");
   await expect(page.locator(`#floor-${reply.id}`)).toContainText("迁移公开回复");
-  await page.locator(`#floor-${floor.id}`).getByRole("link", { name: `编委会论${title}` }).click();
+  await page.locator(`#floor-${floor.id}`).getByRole("link", { name: `${sharedName}论${title}` }).click();
   await expect(page.locator(".wiki-content")).toContainText("经济学公开解释");
   await page.goto(unique.href);
   await expect(page.locator(".wiki-content")).toContainText("独立视角正文保留");
@@ -103,7 +107,7 @@ test("归并后公开正文、讨论回复、分类和双链仍可阅读", async
   await expect(page.getByRole("heading", { level: 1, name: title })).toBeVisible();
   await page.goto(source.href);
   await page.getByRole("link", { name: "合并视角", exact: true }).click();
-  await expect(page.getByRole("heading", { level: 1, name: `编委会论${title}` })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: `${sharedName}论${title}` })).toBeVisible();
   expect((await page.request.get(b.href)).status()).toBe(404);
   const hits = await (await page.request.get(`/api/search?q=${encodeURIComponent(title)}&type=term`)).json();
   expect(hits.hits.some((h: { pageId: number }) => h.pageId === b.pageId)).toBe(false);
@@ -114,10 +118,11 @@ test("并发发布期间编辑 SSR 的正文与提交基准始终属于同一修
   test.setTimeout(90_000);
   await page.request.post("/api/auth/sign-in/email", { data: { email: process.env.SEED_ADMIN_EMAIL, password: process.env.SEED_ADMIN_PASSWORD } });
   const title = `Snapshot ${randomUUID()}`;
-  expect((await page.request.post("/api/submissions", { data: { kind: "new_term", title, content: "Snapshot 0" } })).status()).toBe(201);
-  const catalogue = await (await page.request.get("/api/editor/catalog")).json();
-  const href = catalogue.targets.find((t: { key: string }) => t.key === `${title}@编委会`).href;
-  const id = Number(href.match(/(\d+)$/)[1]);
+  const create = async (data: object) => { const response = await page.request.post("/api/submissions", { data }); expect(response.status()).toBe(201); return response.json(); };
+  const term = await create({ kind: "new_term", title });
+  const thinker = await create({ kind: "new_interpreter", title: `Snapshot reader ${title}` });
+  const perspective = await create({ kind: "new_perspective", termId: term.pageId, interpreterId: thinker.pageId, content: "Snapshot 0" });
+  const id = perspective.pageId;
   await page.goto(`/edit/${id}`);
   await page.route("**/api/submissions", route => route.fulfill({ status: 409, json: { error: "观察提交载荷，保留草稿" } }));
   for (let round = 0; round < 5; round++) {

@@ -2,9 +2,8 @@
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
-import { TERM_CONTENT_TEMPLATE } from "@/lib/content-template";
 
-const example = JSON.stringify({ interpreters: [{ title: "示例诠释者", summary: "一句话简介" }], terms: [{ title: "示例词条", summary: "一句话简介", aliases: ["别名"], content: TERM_CONTENT_TEMPLATE }] }, null, 2);
+const example = JSON.stringify({ interpreters: [{ title: "示例诠释者", summary: "一句话简介" }], terms: [{ title: "示例词条", summary: "一句话简介", aliases: ["别名"] }] }, null, 2);
 
 export function ImportForm() {
   const [source, setSource] = useState(example);
@@ -24,7 +23,7 @@ export function ImportForm() {
   }
   if (result) return <div role="status"><p>已导入 {result.length} 个词条与诠释者，并生成修订记录。</p><ul>{result.map((p) => <li key={p.pageId}><Link className="underline" href={p.href}>{decodeURIComponent(p.href)}</Link></li>)}</ul></div>;
   return <form onSubmit={submit} className="space-y-4">
-    <p className="text-sm text-muted-foreground">每批 1–100 项，最多 1 MB。按示例填写 terms 与 interpreters；词条的 content 会生成编委会视角。整批成功后直接发布，任何一项失败均不保存。</p>
+    <p className="text-sm text-muted-foreground">每批 1–100 项，最多 1 MB。按示例填写 terms 与 interpreters；词条只接受导航信息，正文请另行提交具名诠释者视角。整批成功后直接发布，任何一项失败均不保存。</p>
     <label className="block text-sm">选择 JSON 文件<input className="mt-2 block" type="file" accept=".json,application/json" disabled={busy} onChange={async (e) => {
       const file = e.target.files?.[0]; if (!file) return;
       if (file.size > 1_000_000) { setError("文件不能超过 1 MB"); return; }

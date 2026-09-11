@@ -1,3 +1,4 @@
+import { hasAdminRole } from "@/lib/roles";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { SubmissionForm, type SubmissionFormProps } from "@/components/submission-form";
@@ -18,10 +19,10 @@ export default async function ResubmitPage({ params }: { params: Promise<{ id: s
   const rawId = (await params).id;
   const id = Number(rawId);
   if (!/^[1-9]\d*$/.test(rawId) || !Number.isSafeInteger(id) || id > 2_147_483_647) notFound();
-  const proposal = await getMySubmission(user.id, id, user.role === "admin");
+  const proposal = await getMySubmission(user.id, id, hasAdminRole(user.role));
   if (!proposal || proposal.status !== "rejected") notFound();
   const retry = { id, ownerId: user.id, reason: proposal.rejectionReason ?? "提交已驳回", stale: false, unavailable: undefined as string | undefined, proposal };
-  const common = { isAdmin: user.role === "admin", resubmission: retry };
+  const common = { isAdmin: hasAdminRole(user.role), resubmission: retry };
   let form: SubmissionFormProps;
   let comparison: React.ReactNode = null;
   if (proposal.kind === "edit") {
@@ -50,7 +51,7 @@ export default async function ResubmitPage({ params }: { params: Promise<{ id: s
   } else if (proposal.kind === "new_perspective") {
     const [terms, interpreters, existingPerspectives] = await Promise.all([listTerms(), listInterpreters(), listPerspectivePairs()]);
     const termOptions = terms.map(term => ({ id: term.id, label: term.title }));
-    const interpreterOptions = interpreters.filter(i => !i.isBoard).map(i => ({ id: i.pageId, label: i.name }));
+    const interpreterOptions = interpreters.map(i => ({ id: i.pageId, label: i.name }));
     if (!termOptions.some(t => t.id === proposal.termId)) { retry.unavailable = "原所属词条不可用。"; termOptions.push({ id: proposal.termId!, label: `不可用词条 #${proposal.termId}` }); }
     if (!interpreterOptions.some(i => i.id === proposal.interpreterId)) { retry.unavailable = `${retry.unavailable ?? ""}原诠释者不可用。`; interpreterOptions.push({ id: proposal.interpreterId!, label: `不可用诠释者 #${proposal.interpreterId}` }); }
     form = { ...common, variant: "new_perspective", terms: termOptions, interpreters: interpreterOptions, presetTermId: proposal.termId, existingPerspectives };

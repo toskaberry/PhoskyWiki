@@ -95,8 +95,6 @@ export const interpreters = pgTable("interpreters", {
   summary: text("summary").notNull().default(""),
   birthYear: integer("birth_year"),
   deathYear: integer("death_year"),
-  // 编委会：以站方名义发布通俗解读的特殊诠释者，其视角固定排第一
-  isEditorialBoard: boolean("is_editorial_board").notNull().default(false),
 });
 
 /** 视角负载表：「诠释者 × 词条」的一次完整诠释，站内的原子知识单位。 */
@@ -112,8 +110,6 @@ export const perspectives = pgTable(
     interpreterId: integer("interpreter_id")
       .notNull()
       .references(() => interpreters.pageId, { onDelete: "cascade" }),
-    // 编者置顶标记：null = 未置顶；置顶时间即标记时间（管理员可置顶/取消，T04）
-    pinnedAt: timestamp("pinned_at", { withTimezone: true }),
   },
   // 同一诠释者对同一词条只有一个视角
   (t) => [uniqueIndex("perspectives_term_interpreter_unique").on(t.termId, t.interpreterId)],
@@ -273,7 +269,7 @@ export const submissions = pgTable(
     // 编辑目标页（kind=edit 必填）；新建类提议为空，建什么由 kind + 各字段决定
     pageId: integer("page_id").references(() => pages.id, { onDelete: "cascade" }),
     kind: submissionKindEnum("kind").notNull(),
-    // 全量提议内容；new_term 可携带编委会视角骨架，new_interpreter 无正文
+    // 全量视角正文；new_term 与 new_interpreter 仅携带元数据，正文为空
     content: text("content").notNull().default(""),
     // 新建页的标题（new_perspective 由「诠释者论词条」派生，提交时留空）
     title: text("title"),
@@ -351,11 +347,11 @@ export const submissionVotes = pgTable(
  * trusted 为二期「免审编者晋级层」的预留扩展位——枚举先落库，业务语义随该工单再实现。
  * 「游客」不是数据库角色：未登录即游客，无 user 行。
  */
-export const userRoleEnum = pgEnum("user_role", ["editor", "admin", "trusted"] as const);
+export const userRoleEnum = pgEnum("user_role", ["editor", "admin", "trusted", "superadmin"] as const);
 
 export type UserRole = (typeof userRoleEnum.enumValues)[number];
 
-/** 编者/管理员账号。注册即 editor；管理员由种子或既有管理员指定。 */
+/** 注册即 editor；角色调整由超级管理员执行。 */
 export const user = pgTable("user", {
   id: text("id")
     .primaryKey()
@@ -371,6 +367,16 @@ export const user = pgTable("user", {
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
+});
+
+/** 角色变更的审计记录；账号移除后仍保留当时的身份 ID。 */
+export const roleChanges = pgTable("role_changes", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  actorId: text("actor_id").notNull(),
+  targetUserId: text("target_user_id").notNull(),
+  previousRole: userRoleEnum("previous_role").notNull(),
+  newRole: userRoleEnum("new_role").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 /** 数据库会话（better-auth）：httpOnly cookie 存 token，服务端查本表。 */
@@ -489,7 +495,6 @@ export const interestTags = pgTable(
     userId: text("user_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
-    // 编委会视角固定第一，选它作兴趣无意义：应用层不出现在可选项里
     interpreterId: integer("interpreter_id").references(() => interpreters.pageId, {
       onDelete: "cascade",
     }),

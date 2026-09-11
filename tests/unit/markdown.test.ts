@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { renderMarkdown, wikiLinkResolver, type ResolveWikiLink } from "@/lib/markdown";
 
-// 典型解析器：已存在的两个词条 + 编委会论主体性视角 + 其余一律红链
+// 典型解析器：已存在的两个词条 + 拉康论主体性视角 + 其余一律红链
 const resolve: ResolveWikiLink = (ref) => {
   if (ref.interpreter === null && ref.term === "主体性") {
     return { href: "/term/主体性-1", exists: true };
@@ -10,8 +10,8 @@ const resolve: ResolveWikiLink = (ref) => {
   if (ref.interpreter === null && ref.term === "异化") {
     return { href: "/term/异化-4", exists: true };
   }
-  if (ref.term === "主体性" && ref.interpreter === "编委会") {
-    return { href: "/perspective/编委会论主体性-2", exists: true };
+  if (ref.term === "主体性" && ref.interpreter === "拉康") {
+    return { href: "/perspective/拉康论主体性-2", exists: true };
   }
   return { href: "", exists: false };
 };
@@ -39,11 +39,11 @@ describe("renderMarkdown", () => {
   });
 
   it("显式视角语法渲染为直落视角页的链接，显示 @ 之前的部分", () => {
-    const html = renderMarkdown("先读[[主体性|通俗视角@编委会]]。", resolve);
+    const html = renderMarkdown("先读[[主体性|拉康视角@拉康]]。", resolve);
     expect(html).toContain(
-      '<a class="wiki-link" href="/perspective/编委会论主体性-2">通俗视角</a>',
+      '<a class="wiki-link" href="/perspective/拉康论主体性-2">拉康视角</a>',
     );
-    expect(html).not.toContain("@编委会</a>");
+    expect(html).not.toContain("@拉康</a>");
   });
 
   it("显式视角语法未命中渲染为红链（提示视角尚未创建）", () => {
@@ -86,7 +86,7 @@ describe("wikiLinkResolver", () => {
   it("用 links 表解析结果（键 = 词条名 / 词条@诠释者）构造渲染器回调，未命中为红链", () => {
     const targets = new Map([
       ["异化", { href: "/term/异化-4", exists: true }],
-      ["主体性@编委会", { href: "/perspective/编委会论主体性-2", exists: true }],
+      ["主体性@拉康", { href: "/perspective/拉康论主体性-2", exists: true }],
     ]);
     const resolver = wikiLinkResolver(targets);
 
@@ -94,8 +94,8 @@ describe("wikiLinkResolver", () => {
       href: "/term/异化-4",
       exists: true,
     });
-    expect(resolver({ term: "主体性", interpreter: "编委会" })).toEqual({
-      href: "/perspective/编委会论主体性-2",
+    expect(resolver({ term: "主体性", interpreter: "拉康" })).toEqual({
+      href: "/perspective/拉康论主体性-2",
       exists: true,
     });
     expect(resolver({ term: "主体性", interpreter: null })).toEqual({

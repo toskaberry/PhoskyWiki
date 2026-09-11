@@ -18,6 +18,9 @@ function parseSubmissionInput(body: Record<string, unknown>): SubmissionInput {
   if (typeof kind !== "string" || !KINDS.includes(kind as SubmissionKind)) {
     throw new ReviewError(400, "非法的提交类型");
   }
+  if (kind === "new_term" && body.content !== undefined && typeof body.content !== "string") {
+    throw new ReviewError(400, "新词条只接受导航信息；正文请另行提交具名诠释者视角");
+  }
   // 可省的数值字段：缺席为 undefined（走领域层的必填校验），在场则必须是正整数
   const optionalInt = (value: unknown, field: string): number | undefined => {
     if (value === undefined || value === null || value === "") return undefined;

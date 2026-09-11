@@ -13,7 +13,7 @@ import { FakeObjectStore } from "../fakes/object-store";
 import { auth } from "@/lib/auth";
 import { getDb } from "@/db";
 import { seedDatabase } from "@/db/seed";
-import { pages, submissions, submissionVotes, user } from "@/db/schema";
+import { pages, revisions, submissions, submissionVotes, user } from "@/db/schema";
 import { getHeadContent, getTermDetail, listPerspectivesOfTerm } from "@/lib/content";
 
 const accounts: { id: string; cookie: string }[] = [];
@@ -51,7 +51,7 @@ it("图片经预签名直传，编者引用随两票审核发布，完成后上�
   const guest = new Request("http://localhost/api/images");
   expect((await readImage(guest, context)).status).toBe(404);
   expect((await readImage(request({}, 2), context)).status).toBe(307);
-  const proposal = await submit(request({ kind: "new_term", title: "T15图片审核", content: `![图](/api/images/${upload.id})` }, 2));
+  const proposal = await submit(request({ ...(await perspectiveInput("T15图片审核")), content: `![图](/api/images/${upload.id})` }, 2));
   expect(proposal.status).toBe(201);
   const { submissionId } = await proposal.json();
   const reviewContext = { params: Promise.resolve({ id: String(submissionId) }) };
@@ -70,19 +70,21 @@ function request(body: unknown, account = 0) {
   return new Request("http://localhost/api/submissions", { method: "POST", headers: { "content-type": "application/json", cookie: accounts[account].cookie }, body: JSON.stringify(body) });
 }
 
-it("词条向导一次直编生成信息框、编委会视角及两页修订", async () => {
-  const response = await submit(request({ kind: "new_term", title: "T15物化", summary: "人的关系呈现为物的关系", aliases: ["对象化"], content: "## 通俗解读\n人的关系。\n## 引用\n出处待补充" }));
+it("词条向导只生成信息框与词条修订", async () => {
+  const interpretersBefore = await listInterpreters();
+  const response = await submit(request({ kind: "new_term", title: "T15物化", summary: "人的关系呈现为物的关系", aliases: ["对象化"], content: "" }));
   expect(response.status).toBe(201);
   const result = await response.json();
   expect(await getTermDetail(result.pageId)).toMatchObject({ aliases: ["对象化"], summary: "人的关系呈现为物的关系" });
   const perspectives = await listPerspectivesOfTerm(result.pageId);
-  expect(perspectives).toHaveLength(1);
-  expect(await getHeadContent(perspectives[0].pageId)).toContain("## 通俗解读");
+  expect(perspectives).toHaveLength(0);
   expect(await getHeadContent(result.pageId)).toContain("对象化");
+  expect(await getDb().select().from(revisions).where(eq(revisions.pageId, result.pageId))).toHaveLength(1);
+  expect(await listInterpreters()).toEqual(interpretersBefore);
 });
 
 it("管理员 JSON 批量导入词条与诠释者，失败整批回滚，编者不得导入", async () => {
-  const body = { interpreters: [{ title: "T15思想家", summary: "简介" }], terms: [{ title: "T15导入", summary: "导入简介", aliases: ["导入别名"], content: "## 通俗解读\n导入正文" }] };
+  const body = { interpreters: [{ title: "T15思想家", summary: "简介" }], terms: [{ title: "T15导入", summary: "导入简介", aliases: ["导入别名"] }] };
   expect((await importContent(request(body, 2))).status).toBe(403);
   const response = await importContent(request(body));
   expect(response.status).toBe(201);
@@ -106,11 +108,11 @@ it("拒绝游客上传、伪造元数据、未完成或他人的私有图片及�
   expect((await complete(request({}, 3), context)).status).toBe(404);
   expect((await complete(request({}, 2), context)).status).toBe(200);
   expect((await readImage(request({}, 3), context)).status).toBe(404);
-  const input = { kind: "new_term", title: "T15拒绝非法图片", content: `![图](/api/images/${signed.id})` };
+  const input = { ...(await perspectiveInput("T15拒绝非法图片")), content: `![图](/api/images/${signed.id})` };
   expect((await submit(request(input, 3))).status).toBe(400);
   for (const content of ["![x](https://evil.test/image.png)", `![x](/api/images/${randomUUID()})`]) {
     expect((await submit(request({ ...input, content }))).status).toBe(400);
-    expect((await importContent(request({ terms: [{ title: input.title, content }] }))).status).toBe(400);
+    expect((await importContent(request({ terms: [{ title: "T15拒绝非法图片", content }] }))).status).toBe(400);
   }
   const proposal = await (await submit(request(input, 2))).json();
   expect((await vote(request({ action: "reject", reason: "图片来源不明" }), { params: Promise.resolve({ id: String(proposal.submissionId) }) })).status).toBe(200);
@@ -125,18 +127,51 @@ it("管理员完成上传即公开，无需额外图片审核", async () => {
   expect((await readImage(new Request("http://localhost/api/images"), context)).status).toBe(307);
 });
 
-it("批量导入的前向双链立即解析；信息框快照中的图片字面量不绕过审核", async () => {
+it("导入后具名视角的双链解析；信息框快照中的图片字面量不绕过审核", async () => {
   const signed = await (await presign(request({ filename: "私有.png", size: 10, contentType: "image/png" }, 2))).json();
   store.upload(signed.url, 10);
   const context = { params: Promise.resolve({ id: signed.id }) };
   await complete(request({}, 2), context);
   const response = await importContent(request({ terms: [
-    { title: "T15前项", content: "见 [[T15后项]]", summary: `图片语法示例：![图](/api/images/${signed.id})` },
+    { title: "T15前项", summary: `图片语法示例：![图](/api/images/${signed.id})` },
     { title: "T15后项" },
   ] }));
   expect(response.status).toBe(201);
   const { pages: imported } = await response.json();
-  const perspectives = await listPerspectivesOfTerm(imported[0].pageId);
-  expect((await getWikiLinkTargets(perspectives[0].pageId)).get("T15后项")).toMatchObject({ exists: true });
+  const interpreterId = (await listInterpreters()).find(row => row.name === "马克思")!.pageId;
+  const published = await submit(request({ kind: "new_perspective", termId: imported[0].pageId, interpreterId, content: "见 [[T15后项]]" }));
+  expect(published.status).toBe(201);
+  expect((await getWikiLinkTargets((await published.json()).pageId)).get("T15后项")).toMatchObject({ exists: true });
   expect((await readImage(new Request("http://localhost/api/images"), context)).status).toBe(404);
+});
+
+it("新词条正文被明确拒绝且不创建页面，导入也不能绕过", async () => {
+  for (const content of ["旧词条正文", "  正文  "]) {
+    const input = { title: "禁止正文词条", content };
+    const response = await submit(request({ kind: "new_term", ...input }));
+    expect(response.status).toBe(400);
+    expect((await response.json()).error).toContain("视角");
+    expect((await importContent(request({ terms: [input] }))).status).toBe(400);
+  }
+  expect((await listTerms()).some(term => term.title === "禁止正文词条")).toBe(false);
+});
+
+async function perspectiveInput(title: string) {
+  const response = await submit(request({ kind: "new_term", title }));
+  expect(response.status).toBe(201);
+  return { kind: "new_perspective", termId: (await response.json()).pageId, interpreterId: (await listInterpreters()).find(row => row.name === "马克思")!.pageId };
+}
+
+it("新词条拒绝非字符串正文而不静默丢弃", async () => {
+  for (const content of [123, { text: "正文" }, ["正文"]]) {
+    expect((await submit(request({ kind: "new_term", title: "类型错误正文", content }))).status).toBe(400);
+  }
+});
+
+it("元数据导入更新不能携带旧正文，整批保持原状", async () => {
+  const created = await (await submit(request({ kind: "new_term", title: "导入更新目标", summary: "原简介" }))).json();
+  const result = await importContent(request({ terms: [{ pageId: created.pageId, title: "导入更新目标", summary: "不应生效", content: "被拒正文" }] }));
+  expect(result.status).toBe(400);
+  expect(await getTermDetail(created.pageId)).toMatchObject({ summary: "原简介" });
+  expect(await listPerspectivesOfTerm(created.pageId)).toEqual([]);
 });

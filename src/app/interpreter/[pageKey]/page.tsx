@@ -96,13 +96,11 @@ export default async function InterpreterPage({ params }: Params) {
               ...(interpreter.keyTexts.length ? [{ label: "关键文本", content: <KeyTexts items={interpreter.keyTexts} /> }] : []),
               {
                 label: "类型",
-                content: interpreter.isBoard ? "编委会（特殊诠释者）" : "诠释者",
+                content: "诠释者",
               },
               {
                 label: "生卒",
-                content: interpreter.isBoard
-                  ? "—"
-                  : formatYears(interpreter.birthYear, interpreter.deathYear),
+                content: formatYears(interpreter.birthYear, interpreter.deathYear),
               },
               {
                 label: "所属学派",

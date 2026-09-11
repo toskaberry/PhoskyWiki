@@ -11,7 +11,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { MarkdownEditor } from "@/components/markdown-editor";
 import type { CreateSubmissionResult } from "@/lib/review-types";
-import { TERM_CONTENT_TEMPLATE } from "@/lib/content-template";
 import type { WikiLinkTarget } from "@/lib/markdown";
 import { KeyTextsEditor } from "@/components/key-texts";
 import type { KeyText } from "@/lib/key-texts";
@@ -77,11 +76,11 @@ export function SubmissionForm(props: SubmissionFormProps) {
       : variant === "new_perspective"
         ? "phoskywiki:draft:new-perspective"
         : variant === "new_term"
-          ? "phoskywiki:draft:new-term"
+          ? "phoskywiki:draft:new-term-metadata"
         : "phoskywiki:draft:new-interpreter";
 
   const [content, setContent] = useState(
-    retry ? retry.proposal.content : variant === "edit" ? props.initialContent : variant === "new_term" ? TERM_CONTENT_TEMPLATE : "",
+    retry ? retry.proposal.content : variant === "edit" ? props.initialContent : "",
   );
   const [title, setTitle] = useState(retry ? retry.proposal.title ?? "" : metadataEdit ? props.initialMetadata.title : "");
   const [summary, setSummary] = useState(retry ? retry.proposal.summary ?? "" : metadataEdit ? props.initialMetadata.summary : "");
@@ -339,11 +338,11 @@ export function SubmissionForm(props: SubmissionFormProps) {
             <Input name="aliases" value={aliases} onChange={(e) => setAliases(e.target.value)} aria-describedby="aliases-help" />
           </label>
           <p id="aliases-help" className="text-xs text-muted-foreground">以中英文逗号分隔，顿号属于别名内容。含逗号的单个别名用英文双引号包住，例如 <code>{'"Alpha, Beta",甲、乙'}</code>；引号内用 <code>{'\\"'}</code> 表示双引号、<code>{'\\\\'}</code> 表示反斜杠。</p>
-          {variant === "new_term" && <p className="text-sm text-muted-foreground">填写信息框后，完善下方通俗解读骨架。正文将成为编委会视角，与词条一起提交。</p>}
+          {variant === "new_term" && <p className="text-sm text-muted-foreground">词条仅保存导航信息。创建后可另行添加具名诠释者的视角。</p>}
         </>
       )}
       {(metadataEdit || variant === "new_term" || variant === "new_interpreter") && <KeyTextsEditor value={keyTexts} onChange={setKeyTexts} />}
-      {(variant === "edit" || variant === "new_perspective" || variant === "new_term") && (
+      {(variant === "edit" || variant === "new_perspective") && (
         <MarkdownEditor value={content} onChange={setContent} resolvedWikiLinks={variant === "edit" ? props.resolvedWikiLinks : undefined} />
       )}
 

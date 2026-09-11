@@ -16,7 +16,6 @@ export default async function InterpretersPage() {
         {interpreters.map((interpreter) => (
           <li key={interpreter.pageId} className="min-w-0 rounded-lg border p-5">
             <Link href={pagePath("interpreter", interpreter.slug, interpreter.pageId)} className="break-words text-lg font-semibold underline-offset-4 hover:underline">{interpreter.name}</Link>
-            {interpreter.isBoard && <span className="ml-2 text-xs text-muted-foreground">通俗解读</span>}
             <p className="mt-3 break-words text-sm leading-relaxed text-muted-foreground">{interpreter.summary}</p>
           </li>
         ))}

@@ -127,7 +127,8 @@ export function GraphExplorer({ data }: { data: SiteGraphData }) {
           data={data}
           height={640}
           onNodeClick={(node) => router.push(node.url)}
-          ariaLabel="全站词条双链网络图，节点按学派着色，可缩放拖拽，点击节点进入词条页"
+          onClearSelection={() => setLocated(null)}
+          ariaLabel="全站词条双链网络图，饼图显示多学派视角，可缩放拖拽，聚焦查看关联，点击或回车进入词条页"
         />
       </div>
     </div>

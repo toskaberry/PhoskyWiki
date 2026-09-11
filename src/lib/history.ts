@@ -1,3 +1,4 @@
+import { hasAdminRole } from "@/lib/roles";
 import "server-only";
 
 import { and, desc, eq, isNotNull, isNull } from "drizzle-orm";
@@ -48,7 +49,7 @@ export function compareRevisions(history: Awaited<ReturnType<typeof getPageHisto
 }
 
 export async function rollbackPage(pageId: number, revisionId: number, actor: Actor) {
-  if (actor.role !== "admin") throw new ReviewError(403, "需要管理员角色");
+  if (!hasAdminRole(actor.role)) throw new ReviewError(403, "需要管理员角色");
   return transactionWithSearchSync(getDb(), async (tx) => {
     const page = await lockLivePage(tx, pageId);
     const [target] = await tx.select().from(revisions)
@@ -71,7 +72,7 @@ export async function rollbackPage(pageId: number, revisionId: number, actor: Ac
 
 /** 只改可见性，不改变 head 或任何既有修订；所有页面类型共用。 */
 export async function setPageDeleted(pageId: number, deleted: boolean, actor: Actor) {
-  if (actor.role !== "admin") throw new ReviewError(403, "需要管理员角色");
+  if (!hasAdminRole(actor.role)) throw new ReviewError(403, "需要管理员角色");
   return transactionWithSearchSync(getDb(), async (tx) => {
     const [page] = await tx.select().from(pages).where(eq(pages.id, pageId)).for("update");
     if (!page) throw new ReviewError(404, "页面不存在");
@@ -87,7 +88,7 @@ export async function setPageDeleted(pageId: number, deleted: boolean, actor: Ac
 }
 
 export async function listDeletedPages(actor: Actor) {
-  if (actor.role !== "admin") throw new ReviewError(403, "需要管理员角色");
+  if (!hasAdminRole(actor.role)) throw new ReviewError(403, "需要管理员角色");
   return getDb().select({ id: pages.id, title: pages.title, type: pages.type, deletedAt: pages.deletedAt })
     .from(pages).where(isNotNull(pages.deletedAt)).orderBy(desc(pages.deletedAt), desc(pages.id));
 }

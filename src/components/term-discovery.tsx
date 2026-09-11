@@ -8,11 +8,10 @@ import { useGuestInterests } from "@/lib/guest-interest-store";
 import { hasAnyInterest, serializeInterestSet } from "@/lib/interest-tags";
 import type { TermDiscovery } from "@/lib/term-discovery";
 
-export function TermDiscoveryPanel({ termId, initial, guest, isAdmin }: {
+export function TermDiscoveryPanel({ termId, initial, guest }: {
   termId: number;
   initial: TermDiscovery;
   guest: boolean;
-  isAdmin: boolean;
 }) {
   const selected = useGuestInterests();
   const requestKey = guest && selected && hasAnyInterest(selected)
@@ -37,7 +36,7 @@ export function TermDiscoveryPanel({ termId, initial, guest, isAdmin }: {
 
   // 水合、选择变更和请求失败期间保持 SSR 默认结果，旧请求不能覆盖新选择。
   const data = requestKey && result?.key === requestKey ? result.data : initial;
-  const others = data.perspectives.filter((p) => !p.isBoard);
+  const others = data.perspectives;
   return (
     <>
       <section aria-labelledby="perspectives-heading" className="mt-12">
@@ -55,9 +54,9 @@ export function TermDiscoveryPanel({ termId, initial, guest, isAdmin }: {
           )}
         </div>
         {others.length > 0 ? (
-          <PerspectiveList items={others} isAdmin={isAdmin} interestInterpreterIds={data.interestInterpreterIds} />
+          <PerspectiveList items={others} interestInterpreterIds={data.interestInterpreterIds} />
         ) : (
-          <p className="text-sm text-muted-foreground">该词条暂无其他诠释者的视角。</p>
+          <p className="text-sm text-muted-foreground">该词条暂无诠释者的视角。</p>
         )}
       </section>
       <RelatedTermsPanel items={data.relatedTerms} />

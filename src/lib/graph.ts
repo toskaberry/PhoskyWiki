@@ -252,6 +252,7 @@ async function buildSiteGraph(adjacency: Map<number, Map<number, number>>): Prom
       heat: heat.get(term.id) ?? 0,
       perspectiveCount: term.perspectiveCount,
       schoolId,
+      schoolAffinities: [...(counts ?? [])].sort((a, b) => a.schoolId - b.schoolId),
     };
   });
 
@@ -332,7 +333,7 @@ async function readLocalGraph(
 
   const nodesById = new Map(site.nodes.map((node) => [node.id, node]));
   const schoolIdsWithTerms = new Set(
-    site.nodes.filter((n) => n.schoolId !== null && keptSet.has(n.id)).map((n) => n.schoolId),
+    site.nodes.filter(n => keptSet.has(n.id)).flatMap(n => n.schoolAffinities.map(a => a.schoolId)),
   );
 
   return {

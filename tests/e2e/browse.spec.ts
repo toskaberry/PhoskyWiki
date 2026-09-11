@@ -2,14 +2,14 @@ import { expect, test } from "./fixtures";
 
 // 游客读路径全流程（依赖 pnpm db:seed 灌入的演示内容，见 CI 与 README）
 
-test("词条页：通俗视角全文置顶 + 视角列表折叠展开 + 信息框", async ({ page }) => {
+test("词条页：视角列表折叠展开 + 信息框", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("link", { name: "主体性", exact: true }).click();
 
   await expect(page.getByRole("heading", { level: 1, name: "主体性" })).toBeVisible();
-  // 通俗视角全文置顶（正文段落直接可见，不是折叠列表里的一项）
-  await expect(page.getByRole("heading", { name: "编委会 · 通俗视角" })).toBeVisible();
-  await expect(page.getByText("谁是「我」", { exact: false })).toBeVisible();
+  // 导航页没有默认正文；所有解释均在具名视角中。
+  await expect(page.locator("#board-heading")).toHaveCount(0);
+  await expect(page.locator(".wiki-content")).toHaveCount(0);
   // 信息框
   await expect(page.getByText("词条（聚合枢纽）")).toBeVisible();
   await expect(page.getByText("主体、subject")).toBeVisible();

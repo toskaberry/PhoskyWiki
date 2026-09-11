@@ -120,7 +120,6 @@ export async function consolidateMvp(apply = false, groups = mvpMergeGroups) {
         const [interpreter] = await tx.select().from(pages).where(eq(pages.id, perspective.items[0].interpreterId));
         const title = `${interpreter.title}论${group.title}`;
         await tx.update(pages).set({ title, slug: slugify(title) }).where(eq(pages.id, perspective.keepId));
-        await tx.update(perspectives).set({ pinnedAt: perspective.items.find(p => p.pinnedAt)?.pinnedAt ?? null }).where(eq(perspectives.pageId, perspective.keepId));
         if (perspective.items.length > 1) {
           await preserveConsolidatedTargets(tx, perspective.keepId, targets);
           await applyContentChange(tx, perspective.keepId, content, null, { source: "direct" });

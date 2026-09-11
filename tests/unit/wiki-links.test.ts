@@ -20,10 +20,10 @@ describe("parseWikiLink", () => {
   });
 
   it("显式视角语法：@ 之后是诠释者名，@ 之前是显示文本", () => {
-    expect(parseWikiLink("主体性", "通俗视角@编委会")).toEqual({
+    expect(parseWikiLink("主体性", "拉康视角@拉康")).toEqual({
       term: "主体性",
-      interpreter: "编委会",
-      display: "通俗视角",
+      interpreter: "拉康",
+      display: "拉康视角",
     });
   });
 
@@ -36,18 +36,18 @@ describe("parseWikiLink", () => {
   });
 
   it("@ 之后为空不视为显式视角语法（保持普通别名）", () => {
-    expect(parseWikiLink("主体性", "通俗视角@")).toEqual({
+    expect(parseWikiLink("主体性", "拉康视角@")).toEqual({
       term: "主体性",
       interpreter: null,
-      display: "通俗视角@",
+      display: "拉康视角@",
     });
   });
 
   it("@ 之前为空时显示完整别名（所见即所得）", () => {
-    expect(parseWikiLink("主体性", "@编委会")).toEqual({
+    expect(parseWikiLink("主体性", "@拉康")).toEqual({
       term: "主体性",
-      interpreter: "编委会",
-      display: "@编委会",
+      interpreter: "拉康",
+      display: "@拉康",
     });
   });
 
@@ -64,37 +64,37 @@ describe("parseWikiLink", () => {
 describe("parseWikiLinks", () => {
   it("只提取真实 Markdown 节点，代码与转义示例不形成关系", () => {
     const source = [
-      "[[异化|劳动异化]] [[主体性|通俗@编委会]] [[异化]] [[缺口]]",
+      "[[异化|劳动异化]] [[主体性|通俗@拉康]] [[异化]] [[缺口]]",
       "", "```md", "[[围栏示例]]", "```", "",
       "    [[缩进示例]]", "", "`[[行内示例]]`", "",
-      "\\[[转义示例]]", "", "> [[主体性|重读@编委会]]",
+      "\\[[转义示例]]", "", "> [[主体性|重读@拉康]]",
     ].join("\n");
     expect(parseWikiLinks(source)).toEqual([
       { term: "异化", interpreter: null, display: "劳动异化" },
-      { term: "主体性", interpreter: "编委会", display: "通俗" },
+      { term: "主体性", interpreter: "拉康", display: "通俗" },
       { term: "缺口", interpreter: null, display: "缺口" },
     ]);
   });
   it("提取默认与显式视角两类链接，按键去重保序", () => {
-    const source = "[[异化]] 与 [[主体性|通俗视角@编委会]]，再说 [[异化]]";
+    const source = "[[异化]] 与 [[主体性|拉康视角@拉康]]，再说 [[异化]]";
     expect(parseWikiLinks(source)).toEqual([
       { term: "异化", interpreter: null, display: "异化" },
-      { term: "主体性", interpreter: "编委会", display: "通俗视角" },
+      { term: "主体性", interpreter: "拉康", display: "拉康视角" },
     ]);
   });
 
   it("同一词条的默认与显式形式是两条不同链接", () => {
-    const source = "[[主体性]] 与 [[主体性|通俗视角@编委会]]";
+    const source = "[[主体性]] 与 [[主体性|拉康视角@拉康]]";
     expect(parseWikiLinks(source)).toEqual([
       { term: "主体性", interpreter: null, display: "主体性" },
-      { term: "主体性", interpreter: "编委会", display: "通俗视角" },
+      { term: "主体性", interpreter: "拉康", display: "拉康视角" },
     ]);
   });
 
   it("同一显式目标的不同写法（键相同）只保留一条", () => {
-    const source = "[[主体性|通俗视角@编委会]] 然后 [[主体性|重读@编委会]]";
+    const source = "[[主体性|拉康视角@拉康]] 然后 [[主体性|重读@拉康]]";
     expect(parseWikiLinks(source)).toEqual([
-      { term: "主体性", interpreter: "编委会", display: "通俗视角" },
+      { term: "主体性", interpreter: "拉康", display: "拉康视角" },
     ]);
   });
 
@@ -110,6 +110,6 @@ describe("parseWikiLinks", () => {
 describe("wikiLinkKey", () => {
   it("默认链接 = 词条名；显式视角链接 = 词条@诠释者（links.target_name 规范键）", () => {
     expect(wikiLinkKey({ term: "主体性", interpreter: null })).toBe("主体性");
-    expect(wikiLinkKey({ term: "主体性", interpreter: "编委会" })).toBe("主体性@编委会");
+    expect(wikiLinkKey({ term: "主体性", interpreter: "拉康" })).toBe("主体性@拉康");
   });
 });

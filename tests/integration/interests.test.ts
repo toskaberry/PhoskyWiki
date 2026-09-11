@@ -26,7 +26,6 @@ import {
   saveInterestTags,
 } from "@/lib/interests";
 import { EMPTY_INTEREST_SET, reorderPerspectivesByInterest } from "@/lib/interest-tags";
-import { setPerspectivePinned } from "@/lib/pinning";
 import { listRelatedTerms } from "@/lib/recommend";
 
 beforeAll(async () => {
@@ -95,7 +94,7 @@ async function categoryIdByName(name: string): Promise<number> {
   return category.id;
 }
 
-/** 主体性 词条下的视角标题（默认序：编委会 → 热度 → 创建序）。 */
+/** 主体性 词条下的视角标题（默认序：热度 → 创建序）。 */
 async function subjectivityTitles(): Promise<string[]> {
   return (await listPerspectivesOfTerm(await termIdByTitle("主体性"))).map((p) => p.title);
 }
@@ -208,9 +207,9 @@ describe("视角列表兴趣重排（登录态服务端组合）", () => {
     orderUser = await createEditor("interest-order-123");
   });
 
-  it("默认序：编委会第一，站内引用多的视角在前（未设兴趣不受影响）", async () => {
+  it("默认序：站内引用多的视角在前（未设兴趣不受影响）", async () => {
     const titles = await subjectivityTitles();
-    expect(titles[0]).toBe("编委会论主体性");
+    expect(titles[0]).toBe("阿尔都塞论主体性");
     // 种子里唯一被显式视角链接引用的是 阿尔都塞论主体性（[[主体性|阿尔都塞论主体性@阿尔都塞]]）
     expect(titles.indexOf("阿尔都塞论主体性")).toBeLessThan(titles.indexOf("德勒兹论主体性"));
     // 空兴趣集 = 默认序
@@ -226,10 +225,9 @@ describe("视角列表兴趣重排（登录态服务端组合）", () => {
       schools: [],
       categories: [],
     });
-    expect(after[0]).toBe("编委会论主体性"); // 编委会不变量
-    expect(after[1]).toBe("德勒兹论主体性"); // 兴趣诠释者紧随其后
+    expect(after[0]).toBe("德勒兹论主体性"); // 兴趣诠释者紧随其后
     // 其余保持默认相对序
-    expect(after.slice(2)).toEqual(before.filter((title) => title !== "德勒兹论主体性").slice(1));
+    expect(after.slice(1)).toEqual(before.filter((title) => title !== "德勒兹论主体性"));
   });
 
   it("学派兴趣蕴含成员：精神分析（弗洛伊德、拉康）的视角排前", async () => {
@@ -238,31 +236,13 @@ describe("视角列表兴趣重排（登录态服务端组合）", () => {
       schools: [await schoolIdByTitle("精神分析")],
       categories: [],
     });
-    expect(after[0]).toBe("编委会论主体性");
+    expect(after.slice(0, 2)).toEqual(["拉康论主体性", "弗洛伊德论主体性"]);
     // 拉康（创建序在前）与弗洛伊德（创建序在后，种子末段）都升到前面
     expect(after.indexOf("拉康论主体性")).toBeLessThan(after.indexOf("阿尔都塞论主体性"));
     expect(after.indexOf("弗洛伊德论主体性")).toBeLessThan(after.indexOf("阿尔都塞论主体性"));
   });
 
-  it("编者置顶优先于兴趣重排（编辑信号 > 个人兴趣）", async () => {
-    const subjectivity = await termIdByTitle("主体性");
-    const foucault = (await listPerspectivesOfTerm(subjectivity)).find(
-      (p) => p.title === "福柯论主体性",
-    )!;
-    expect(await setPerspectivePinned(foucault.pageId, true)).toBe(true);
-    try {
-      const after = await orderedTitlesWithInterests(orderUser.userId, "主体性", {
-        interpreters: [await interpreterIdByName("德勒兹")],
-        schools: [],
-        categories: [],
-      });
-      expect(after[0]).toBe("编委会论主体性");
-      expect(after[1]).toBe("福柯论主体性"); // 置顶
-      expect(after[2]).toBe("德勒兹论主体性"); // 兴趣
-    } finally {
-      await setPerspectivePinned(foucault.pageId, false);
-    }
-  });
+
 });
 
 describe("相关词条推荐（共同引用 + 兴趣匹配）", () => {
@@ -274,12 +254,11 @@ describe("相关词条推荐（共同引用 + 兴趣匹配）", () => {
 
   it("默认（无兴趣）按共同引用强度排序", async () => {
     const related = await listRelatedTerms(await subjectivityGraph(), null, new Set());
-    // 主体性 的 1 跳邻居：异化(10) > 意识形态(8) > 剩余价值(2) > 价值(1)
+    // 主体性 的 1 跳邻居：异化 > 意识形态 > 剩余价值（价值已无主体性入链）
     expect(related.map((term) => term.title)).toEqual([
       "异化",
       "意识形态",
       "剩余价值",
-      "价值",
     ]);
     expect(related.every((term) => term.interestMatchCount === 0)).toBe(true);
     expect(related[0].commonRefCount).toBeGreaterThan(related[1].commonRefCount);
@@ -291,7 +270,6 @@ describe("相关词条推荐（共同引用 + 兴趣匹配）", () => {
     const related = await listRelatedTerms(await subjectivityGraph(), interests, new Set());
     expect(related.map((term) => term.title)).toEqual([
       "剩余价值",
-      "价值",
       "异化",
       "意识形态",
     ]);

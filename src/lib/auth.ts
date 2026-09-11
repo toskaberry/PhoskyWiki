@@ -53,6 +53,8 @@ export const auth = betterAuth({
     },
   },
   session: {
+    // Role changes apply to the next request, including existing sessions.
+    cookieCache: { enabled: false },
     // 数据库会话默认 30 天有效，滚动续期——「会话持久」的验收口径
     expiresIn: 60 * 60 * 24 * 30,
     updateAge: 60 * 60 * 24,

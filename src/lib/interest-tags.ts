@@ -52,15 +52,11 @@ export function mergeInterestSets(a: InterestSet, b: InterestSet): InterestSet {
 
 export interface RankablePerspective {
   interpreterId: number;
-  /** 编委会通俗视角：固定第一，兴趣不参与（T02 既定不变量） */
-  isBoard?: boolean;
-  /** 编者置顶（T04）：编辑信号优先于个人兴趣 */
-  pinned?: boolean;
 }
 
 /**
  * 兴趣重排（spec「Implementation Decisions」：设兴趣时同一列表按兴趣重排，
- * 覆盖的是默认热度序）：编委会 → 置顶 → 兴趣诠释者的视角 → 其余。
+ * 覆盖的是默认热度序）：兴趣诠释者的视角 → 其余。
  * 组内保持传入序（调用方已按热度/创建序排好）；空兴趣集原样返回；
  * 幂等——重复应用同一集合结果不变（服务端排过后客户端再应用亦安全）。
  */
@@ -70,7 +66,7 @@ export function reorderPerspectivesByInterest<T extends RankablePerspective>(
 ): T[] {
   if (interestedInterpreterIds.size === 0 || items.length < 2) return items;
   const rankOf = (item: T): number =>
-    item.isBoard ? 0 : item.pinned ? 1 : interestedInterpreterIds.has(item.interpreterId) ? 2 : 3;
+    interestedInterpreterIds.has(item.interpreterId) ? 0 : 1;
   return items
     .map((item, index) => ({ item, index, rank: rankOf(item) }))
     .sort((a, b) => a.rank - b.rank || a.index - b.index)

@@ -10,18 +10,21 @@ import { getNotificationInbox } from "@/lib/notifications";
 import { getSessionUser } from "@/lib/session";
 import { listMySubmissions } from "@/lib/submission-history";
 import { formatWhen, kindLabels, RejectionReason, statusLabels } from "./_components";
+import { hasAdminRole } from "@/lib/roles";
+import { UserManagement } from "./_user-management";
 
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = { title: "个人主页" };
 
-type Props = { searchParams: Promise<{ status?: string | string[] }> };
+type Props = { searchParams: Promise<{ status?: string | string[]; userQuery?: string; userPage?: string }> };
 
 export default async function ProfilePage({ searchParams }: Props) {
   const user = await getSessionUser();
   if (!user) redirect("/login");
 
-  const requestedStatus = (await searchParams).status;
+  const params = await searchParams;
+  const requestedStatus = params.status;
   const status =
     requestedStatus === "pending" || requestedStatus === "approved" || requestedStatus === "rejected"
       ? requestedStatus
@@ -47,6 +50,13 @@ export default async function ProfilePage({ searchParams }: Props) {
     <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-8">
       <h1 className="text-2xl font-bold tracking-tight">个人主页</h1>
       <p className="mt-2 text-sm text-muted-foreground">{user.name}，在这里查看你的提交进度与审核结果。</p>
+
+      {hasAdminRole(user.role) && <nav aria-label="管理员工具" className="mt-6 flex flex-wrap gap-4 text-sm">
+        <Link href="/review" className="underline">审核队列</Link>
+        <Link href="/admin/deleted" className="underline">管理员回收站</Link>
+        <Link href="/admin/access" className="underline">邀请与恢复</Link>
+      </nav>}
+      {user.role === "superadmin" && <UserManagement actorId={user.id} query={typeof params.userQuery === "string" ? params.userQuery : ""} page={typeof params.userPage === "string" ? params.userPage : "1"} />}
 
       <section aria-labelledby="submission-history-heading" className="mt-8">
         <h2 id="submission-history-heading" className="text-xl font-semibold">提交历史</h2>

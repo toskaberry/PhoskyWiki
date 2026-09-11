@@ -99,7 +99,7 @@ test("局部图谱：历史特殊名称按文本显示，悬停无注入且点�
   await page.goto(entryUrl);
   await expect(page).toHaveURL(entryUrl);
   const canvas = page.getByTestId("graph-canvas");
-  await expect(canvas.locator("canvas")).toBeVisible();
+  await expect(canvas.locator(`[data-node-id="${rootId}"]`)).toBeVisible();
   await canvas.scrollIntoViewIfNeeded();
   const box = (await canvas.boundingBox())!;
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
@@ -108,4 +108,18 @@ test("局部图谱：历史特殊名称按文本显示，悬停无注入且点�
   await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
   await expect(page).toHaveURL(rootUrl);
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(title);
+});
+
+test("窄屏长标题和学派详情可以滚动读完并进入词条", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`${rootUrl}?graph-tooltip=scroll`);
+  const graph = page.getByTestId("graph-canvas");
+  const node = graph.locator(`[data-node-id="${rootId}"]`);
+  await expect(node).toBeVisible();
+  await node.focus();
+  const details = graph.getByRole("region", { name: "词条关联详情" });
+  await expect(details.locator("strong")).toHaveText(title);
+  expect(await details.evaluate(element => element.scrollHeight > element.clientHeight)).toBe(true);
+  await details.getByRole("button", { name: "进入词条" }).click();
+  await expect(page).toHaveURL(rootUrl);
 });

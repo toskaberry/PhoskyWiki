@@ -15,7 +15,7 @@ test("驳回词条从详情完整预填、网络失败保留独立草稿、重�
   const title = `Resubmit ${randomUUID()}`;
   try {
     await fixtureRegister(editor.request, { data: { email: `${randomUUID()}@example.com`, password: "password123", name: "重提编者" } });
-    const created = await editor.request.post("/api/submissions", { data: { kind: "new_term", title, summary: "原提案简介", aliases: ["别名甲", "别名乙"], content: "完整原提案正文" } });
+    const created = await editor.request.post("/api/submissions", { data: { kind: "new_term", title, summary: "原提案简介", aliases: ["别名甲", "别名乙"] } });
     const { submissionId } = await created.json();
     await page.goto("/review");
     const rejectedEntry = page.locator(`[data-submission-id="${submissionId}"]`);
@@ -34,7 +34,7 @@ test("驳回词条从详情完整预填、网络失败保留独立草稿、重�
     await expect(editor.getByLabel("词条标题", { exact: true })).toHaveValue(title);
     await expect(editor.getByLabel("一句话简介（信息框用）")).toHaveValue("原提案简介");
     await expect(editor.getByLabel("别名（信息框用，以逗号分隔）")).toHaveValue("别名甲,别名乙");
-    await expect(editor.getByRole("textbox", { name: "正文（Markdown）" })).toContainText("完整原提案正文");
+    await expect(editor.getByRole("textbox", { name: "正文（Markdown）" })).toHaveCount(0);
     await editor.getByLabel("一句话简介（信息框用）").fill("整理后简介");
     await editor.route("**/api/submissions", route => route.abort());
     await editor.getByRole("button", { name: "提交审核", exact: true }).click();
@@ -65,7 +65,7 @@ test("驳回词条从详情完整预填、网络失败保留独立草稿、重�
     await editor.getByRole("link", { name: title, exact: true }).click();
     await editor.waitForURL("**/term/**");
     await expect(editor.getByText("整理后简介", { exact: true }).first()).toBeVisible();
-    await expect(editor.getByText("完整原提案正文", { exact: true })).toBeVisible();
+    await expect(editor.getByRole("heading", { level: 1, name: title })).toBeVisible();
     await editor.goto(`/profile/submissions/${submissionId}`);
     await expect(editor.getByText("已驳回", { exact: true })).toBeVisible();
     expect(await editor.getByRole("region", { name: "审核记录" }).innerText()).toBe(oldReview);

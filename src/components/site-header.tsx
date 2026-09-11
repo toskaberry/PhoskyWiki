@@ -1,3 +1,4 @@
+import { hasAdminRole, roleLabels } from "@/lib/roles";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
@@ -6,7 +7,6 @@ import { NotificationLink } from "@/components/notification-link";
 import { SearchBox } from "@/components/search-box";
 import { getUnreadNotificationCount } from "@/lib/notifications";
 import { getSessionUser } from "@/lib/session";
-import type { UserRole } from "@/db/schema";
 
 const navItems = [
   { href: "/terms", label: "词条" },
@@ -18,12 +18,6 @@ const navItems = [
   { href: "/interests", label: "兴趣" },
 ];
 
-const roleLabels: Record<UserRole, string> = {
-  editor: "编者",
-  admin: "管理员",
-  // trusted 是二期「免审编者」的预留位，一期按下不表
-  trusted: "编者",
-};
 
 export async function SiteHeader() {
   const user = await getSessionUser();
@@ -54,9 +48,9 @@ export async function SiteHeader() {
             <>
               <ButtonLikeLink href="/new/term">创建词条</ButtonLikeLink>
               <ButtonLikeLink href="/new/interpreter">新诠释者</ButtonLikeLink>
-              {user.role === "admin" && <ButtonLikeLink href="/review">审核队列</ButtonLikeLink>}
-              {user.role === "admin" && <ButtonLikeLink href="/admin/deleted">已删除页面</ButtonLikeLink>}
-              {user.role === "admin" && <ButtonLikeLink href="/admin/access">邀请与恢复</ButtonLikeLink>}
+              {hasAdminRole(user.role) && <ButtonLikeLink href="/review">审核队列</ButtonLikeLink>}
+              {hasAdminRole(user.role) && <ButtonLikeLink href="/admin/deleted">已删除页面</ButtonLikeLink>}
+              {hasAdminRole(user.role) && <ButtonLikeLink href="/admin/access">邀请与恢复</ButtonLikeLink>}
               <NotificationLink key={user.id} initialCount={unreadCount} />
               <Link href="/profile" data-testid="session-user" className="min-w-0 break-words text-muted-foreground hover:text-foreground">
                 {user.name}

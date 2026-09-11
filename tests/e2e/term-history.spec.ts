@@ -19,8 +19,11 @@ test("词条两次编辑、非相邻字段比较、带来源回滚、id链接与
   const token = randomUUID();
   const title = `History Original ${token}`;
   const newestTitle = `History Latest ${token}`;
-  const term = await submit(page.request, { kind: "new_term", title, summary: "原始简介", aliases: ["原始别名"], content: "独立通俗视角" });
-  const source = await submit(page.request, { kind: "new_term", title: `Linked ${token}`, content: `参见 [[${title}]]。` });
+  const term = await submit(page.request, { kind: "new_term", title, summary: "原始简介", aliases: ["原始别名"] });
+  const interpreter = await submit(page.request, { kind: "new_interpreter", title: `History Reader ${token}` });
+  await submit(page.request, { kind: "new_perspective", termId: term.pageId, interpreterId: interpreter.pageId, content: "独立具名视角" });
+  const source = await submit(page.request, { kind: "new_term", title: `Linked ${token}` });
+  const sourcePerspective = await submit(page.request, { kind: "new_perspective", termId: source.pageId, interpreterId: interpreter.pageId, content: `参见 [[${title}]]。` });
   const api = `/api/pages/${term.pageId}/history`;
   const first = (await (await page.request.get(api)).json()).revisions[0].id;
   await page.goto(`/edit/${term.pageId}`);
@@ -65,8 +68,9 @@ test("词条两次编辑、非相邻字段比较、带来源回滚、id链接与
     await expect(page).toHaveURL(new RegExp(`/term/history-original-.*-${term.pageId}$`));
     await expect(page.getByText("原始简介", { exact: true }).first()).toBeVisible();
     await expect(page.getByText("原始别名", { exact: true })).toBeVisible();
-    await expect(page.getByText("独立通俗视角", { exact: true })).toBeVisible();
-    await page.goto(source.href);
+    await page.getByRole("link", { name: `History Reader ${token}论${title}`, exact: true }).click();
+    await expect(page.locator(".wiki-content")).toContainText("独立具名视角");
+    await page.goto(sourcePerspective.href);
     await page.locator(".wiki-content").getByRole("link", { name: title, exact: true }).click();
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(title);
     await submit(page.request, { kind: "new_term", title: newestTitle });

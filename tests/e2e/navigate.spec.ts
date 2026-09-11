@@ -7,14 +7,14 @@ test("词条页反链面板：列出引用本页的视角，可点进视角页",
   await page.getByRole("link", { name: "主体性", exact: true }).click();
 
   const panel = page.locator("section", { has: page.getByRole("heading", { name: /反链/ }) });
-  // 编委会论异化 与 黑格尔论异化 同属「异化」词条：断言落在具体行上
-  const row = panel.locator("li").filter({ hasText: "编委会论异化" });
+  // 黑格尔论异化 引用主体性：断言落在具体行上
+  const row = panel.locator("li").filter({ hasText: "黑格尔论异化" });
   await expect(row).toBeVisible();
   await expect(row.getByText("属于词条 异化")).toBeVisible();
 
-  await panel.getByRole("link", { name: "编委会论异化" }).click();
+  await panel.getByRole("link", { name: "黑格尔论异化" }).click();
   await expect(page).toHaveURL(/\/perspective\//, { timeout: 5_000 });
-  await expect(page.getByRole("heading", { level: 1, name: "编委会论异化" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "黑格尔论异化" })).toBeVisible();
 });
 
 test("显式视角链接：[[词条|视角@诠释者]] 直落视角页；视角页也有反链面板", async ({ page }) => {
@@ -44,14 +44,13 @@ test("显式视角语法未命中：红链提示视角尚未创建、不可点�
   await expect(redLink).toHaveAttribute("title", "视角尚未创建");
 });
 
-test("同名聚合：价值链接落统一词条，编委会视角分章阅读", async ({ page }) => {
+test("同名聚合：价值链接落统一词条，具名视角阅读", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("link", { name: "剩余价值", exact: true }).click();
+  await page.getByRole("link", { name: "马克思论剩余价值", exact: true }).click();
   await page.locator(".wiki-content").getByRole("link", { name: "价值", exact: true }).click();
   await expect(page).toHaveURL(/\/term\//);
   await expect(page.getByRole("heading", { level: 1, name: "价值" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "政治经济学", exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "哲学", exact: true })).toBeVisible();
-  await page.getByRole("link", { name: "查看视角页 →", exact: true }).click();
-  await expect(page.getByRole("heading", { level: 1, name: "编委会论价值" })).toBeVisible();
+  await page.getByRole("link", { name: "马克思论价值", exact: true }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "马克思论价值" })).toBeVisible();
 });

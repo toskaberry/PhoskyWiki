@@ -1,3 +1,5 @@
+import { hasAdminRole } from "@/lib/roles";
+import { PageAction } from "@/components/page-action";
 import { KeyTexts } from "@/components/key-texts";
 import Link from "next/link";
 import { AgentPanel } from "@/components/agent-panel";
@@ -6,13 +8,11 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 
 import { BacklinkPanel } from "@/components/backlink-panel";
-import { Infobox, InfoboxLinks, WikiContent } from "@/components/wiki-content";
+import { Infobox, InfoboxLinks } from "@/components/wiki-content";
 import { LocalGraph } from "@/components/local-graph";
 import { TermDiscoveryPanel } from "@/components/term-discovery";
 import {
   getTermDetail,
-  getHeadContent,
-  getWikiLinkTargets,
   listBacklinks,
   listCategoriesOfTerm,
   listPerspectivesOfTerm,
@@ -21,9 +21,8 @@ import { categoryPath } from "@/lib/categories";
 import { countDiscussionPosts } from "@/lib/discussion";
 import { getLocalGraph } from "@/lib/graph";
 import { getInterestTags } from "@/lib/interests";
-import { renderMarkdown, wikiLinkResolver } from "@/lib/markdown";
 import { getTermDiscovery } from "@/lib/term-discovery";
-import { pageIdFromKey, pageKey, pagePath } from "@/lib/slug";
+import { pageIdFromKey, pageKey } from "@/lib/slug";
 import { resolveLivePage } from "@/lib/resolve-page";
 import { getSessionUser } from "@/lib/session";
 
@@ -52,15 +51,10 @@ export default async function TermPage({ params }: Params) {
       getLocalGraph(page.id, 1),
       countDiscussionPosts(page.id),
     ]);
-  const board = perspectives.find((p) => p.isBoard);
 
   const interests = sessionUser ? await getInterestTags(sessionUser.id) : null;
   const discovery = await getTermDiscovery(page.id, interests);
   if (!discovery) notFound();
-
-  const [boardContent, boardTargets] = board
-    ? await Promise.all([getHeadContent(board.pageId), getWikiLinkTargets(board.pageId)])
-    : [null, null];
 
   return (
     <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8">
@@ -72,9 +66,9 @@ export default async function TermPage({ params }: Params) {
         <span aria-current="page">{term.title}</span>
       </nav>
       <HistoryLink pageId={page.id} />
+      {hasAdminRole(sessionUser?.role) && <div className="mb-4"><PageAction pageId={page.id} action="delete" deleteTerm={{ title: term.title, perspectiveCount: perspectives.length }} /></div>}
       {sessionUser && <div className="mb-4 flex gap-4 text-sm">
         <Link href={`/edit/${pageKey(page.slug, page.id)}`} className="text-primary hover:underline">编辑词条信息</Link>
-        {board && <Link href={`/edit/${pageKey(board.slug, board.pageId)}`} className="text-primary hover:underline">编辑通俗视角</Link>}
       </div>}
 
       <div className="flex flex-col gap-10 lg:flex-row lg:gap-10">
@@ -93,33 +87,10 @@ export default async function TermPage({ params }: Params) {
             </Link>
           </p>
 
-          {board && boardContent !== null && (
-            <section aria-labelledby="board-heading" className="mt-10 scroll-mt-20">
-              <div className="mb-4 flex items-baseline justify-between">
-                <h2 id="board-heading" className="text-xl font-semibold">
-                  编委会 · 通俗视角
-                </h2>
-                <Link
-                  href={pagePath("perspective", board.slug, board.pageId)}
-                  className="text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
-                >
-                  查看视角页 →
-                </Link>
-              </div>
-              <WikiContent
-                html={renderMarkdown(
-                  boardContent,
-                  wikiLinkResolver(boardTargets ?? new Map()),
-                )}
-              />
-            </section>
-          )}
-
           <TermDiscoveryPanel
             termId={page.id}
             initial={discovery}
             guest={!sessionUser}
-            isAdmin={sessionUser?.role === "admin"}
           />
 
           <BacklinkPanel items={backlinks} />
@@ -152,11 +123,7 @@ export default async function TermPage({ params }: Params) {
                   />
                 ),
               },
-              { label: "视角", content: `${perspectives.length} 个（含通俗视角）` },
-              {
-                label: "通俗视角",
-                content: board ? "已发布" : "暂缺",
-              },
+              { label: "视角", content: `${perspectives.length} 个` },
             ]}
           />
         </div>

@@ -1,3 +1,4 @@
+import { hasAdminRole } from "@/lib/roles";
 // 审核队列（T06，仅管理员）：待审列表 + 当前版 vs 提案 diff（现算，ADR-0004 #1）
 // + 受理/驳回操作。非管理员（含游客）只见访问受限面板，不泄露队列内容。
 
@@ -116,7 +117,7 @@ function QueueEntry({ item }: { item: QueueItem }) {
 
 export default async function ReviewQueuePage() {
   const sessionUser = await getSessionUser();
-  if (!sessionUser || sessionUser.role !== "admin") {
+  if (!sessionUser || !hasAdminRole(sessionUser.role)) {
     return (
       <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-8">
         <h1 className="text-2xl font-bold tracking-tight">审核队列</h1>

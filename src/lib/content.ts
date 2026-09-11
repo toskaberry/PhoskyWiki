@@ -102,15 +102,12 @@ export interface PerspectiveListItem {
   interpreterId: number;
   interpreterName: string;
   interpreterSlug: string;
-  isBoard: boolean;
-  /** 编者置顶（管理员标记，T04）：置顶视角紧随通俗视角之后 */
-  pinned: boolean;
   linkCount: number;
 }
 
 /**
  * 词条下的视角列表，默认排序（spec「Implementation Decisions」）：
- * 编委会通俗视角固定第一 → 编者置顶 → 站内引用数（links 统计）热度 → 并列时按创建序。
+ * 站内引用数（links 统计）热度 → 并列时按创建序。
  */
 export async function listPerspectivesOfTerm(
   termId: number,
@@ -138,8 +135,6 @@ export async function listPerspectivesOfTerm(
       interpreterId: interpreters.pageId,
       interpreterName: interpreterPages.title,
       interpreterSlug: interpreterPages.slug,
-      isBoard: interpreters.isEditorialBoard,
-      pinnedAt: perspectives.pinnedAt,
       linkCount: sql<number>`coalesce(${linkCounts.count}, 0)`.mapWith(Number),
     })
     .from(perspectives)
@@ -155,13 +150,11 @@ export async function listPerspectivesOfTerm(
       ),
     )
     .orderBy(
-      desc(interpreters.isEditorialBoard),
-      desc(sql`${perspectives.pinnedAt} is not null`),
       desc(sql`coalesce(${linkCounts.count}, 0)`),
       asc(pages.id),
     );
 
-  return rows.map(({ pinnedAt, ...row }) => ({ ...row, pinned: pinnedAt !== null }));
+  return rows;
 }
 
 /** 页面当前（head）修订的 Markdown 源文本。 */
@@ -198,10 +191,10 @@ export async function getPerspectiveEditingState(pageId: number) {
 
 /** 全部在线诠释者，供索引与新建视角选择器使用。 */
 export async function listInterpreters(): Promise<
-  { pageId: number; name: string; slug: string; summary: string; isBoard: boolean }[]
+  { pageId: number; name: string; slug: string; summary: string }[]
 > {
   return getDb()
-    .select({ pageId: interpreters.pageId, name: pages.title, slug: pages.slug, summary: interpreters.summary, isBoard: interpreters.isEditorialBoard })
+    .select({ pageId: interpreters.pageId, name: pages.title, slug: pages.slug, summary: interpreters.summary })
     .from(interpreters)
     .innerJoin(pages, eq(pages.id, interpreters.pageId))
     .where(and(eq(pages.type, "interpreter"), isPageVisible(pages.id)))
@@ -240,7 +233,6 @@ export async function getPerspectiveDetail(id: number) {
       interpreterSlug: interpreterPages.slug,
       interpreterBirthYear: interpreters.birthYear,
       interpreterDeathYear: interpreters.deathYear,
-      isBoard: interpreters.isEditorialBoard,
     })
     .from(perspectives)
     .innerJoin(pages, eq(pages.id, perspectives.pageId))
@@ -271,7 +263,6 @@ export async function getInterpreterDetail(id: number) {
       keyTexts: interpreters.keyTexts,
       birthYear: interpreters.birthYear,
       deathYear: interpreters.deathYear,
-      isBoard: interpreters.isEditorialBoard,
     })
     .from(pages)
     .innerJoin(interpreters, eq(interpreters.pageId, pages.id))

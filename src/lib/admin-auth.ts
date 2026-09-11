@@ -4,6 +4,10 @@ import { writeLimitResponse } from "./write-limits";
 
 import { auth } from "@/lib/auth";
 import type { UserRole } from "@/db/schema";
+import { hasAdminRole } from "@/lib/roles";
+import { getDb } from "@/db";
+import { user } from "@/db/schema";
+import { eq } from "drizzle-orm";
 
 /**
  * 校验管理员身份。返回 null = 通过；否则返回应直接作为响应的错误 Response。
@@ -25,8 +29,9 @@ export async function requireAdminUser(
     return Response.json({ error: "管理员操作需要登录" }, { status: 401 });
   }
   // additionalFields 的 role 类型是 string；取值域由 user_role 枚举保证
-  const role = session.user.role as UserRole;
-  if (role !== "admin") {
+  const [current] = await getDb().select({ role: user.role }).from(user).where(eq(user.id, session.user.id));
+  const role = current?.role;
+  if (!role || !hasAdminRole(role)) {
     return Response.json({ error: "需要管理员角色" }, { status: 403 });
   }
   if (!["GET", "HEAD", "OPTIONS"].includes(req.method)) {
@@ -34,4 +39,10 @@ export async function requireAdminUser(
     if (limited) return limited;
   }
   return { user: { id: session.user.id, role } };
+}
+
+export async function requireSuperAdminUser(req: Request) {
+  const actor = await requireAdminUser(req);
+  if (actor instanceof Response) return actor;
+  return actor.user.role === "superadmin" ? actor : Response.json({ error: "需要超级管理员角色" }, { status: 403 });
 }

@@ -1,3 +1,4 @@
+import { hasAdminRole } from "@/lib/roles";
 // 词条讨论区页（T13）：楼层 + 一层嵌套回复 + 视角锚点 + 版务。
 // 游客只读；编者可发言（锁定除外）；管理员可软删楼层、锁定/解锁。
 // ?perspective=<pageId> 由视角页「就这个视角发起讨论」带出：预填发言框锚点，
@@ -68,7 +69,7 @@ export default async function TermDiscussionPage({ params, searchParams }: Param
     getSessionUser(),
     resolveComposerAnchor(page.id, (await searchParams).perspective),
   ]);
-  const isAdmin = sessionUser?.role === "admin";
+  const isAdmin = hasAdminRole(sessionUser?.role);
   const canPost = sessionUser !== null && !locked;
   // 游客登录后回到本讨论区（带 ?perspective= 预填锚点一起带回）
   const loginHref = `/login?redirect=${encodeURIComponent(

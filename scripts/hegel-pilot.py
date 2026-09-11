@@ -210,7 +210,7 @@ def compose(output, plan):
         field = "excerptFor" if c["status"] == "substantive" else "mentionedFor"
         for p in selected:
             coverage[p["id"]][field].append(c["key"])
-        content, board = "", ""
+        content = ""
         if c["status"] == "substantive":
             scope = "《小逻辑》（黑格尔，贺麟译），第一篇存在论 A．质，§86—98。"
             if any(p["background"] for p in selected):
@@ -233,8 +233,7 @@ def compose(output, plan):
             chunks.append("## 待补与校勘\n\n" + (pending + "\n\n" if pending else "") +
                           "其他章节论述尚待整理。原文疑似错字及异体字符保留；校勘意见须与引文分开。")
             content = "\n\n".join(chunks) + "\n"
-            board = "## 入门说明（编委会）\n\n" + intro + "\n\n## 资料范围\n\n" + scope + "\n"
-        payloads.append({**c, "content": content, "boardContent": board})
+        payloads.append({**c, "content": content})
     for row in coverage.values():
         if not row["excerptFor"]:
             row["reason"] = "仅提及概念，保留定位待补视角" if row["mentionedFor"] else "未选作必要章外背景"

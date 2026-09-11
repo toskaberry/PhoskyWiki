@@ -23,7 +23,7 @@ try {
     }
   }
   const [command, ...args] = process.argv.slice(2);
-  if (!["serve", "verify", "migrate", "bootstrap", "reindex", "search-status", "recover-admin", "images"].includes(command)) throw new Error();
+  if (!["serve", "verify", "migrate", "bootstrap", "reindex", "search-status", "recover-admin", "promote-first-superadmin", "images"].includes(command)) throw new Error();
   const child = spawn(process.execPath, command === "serve"
     ? ["node_modules/next/dist/bin/next", "start", "--hostname", "0.0.0.0"]
     : command === "images"

@@ -44,7 +44,7 @@ test("管理员签发邀请、编者注册与双人受理，恢复密码使旧�
     const title = `邀请双人受理-${suffix}`;
     await page.goto("/new/term");
     await page.getByLabel("词条标题").fill(title);
-    await page.getByRole("textbox", { name: "正文（Markdown）" }).fill("两名管理员受理后可见的正文。");
+    await page.getByLabel("一句话简介（信息框用）").fill("两名管理员受理后可见的词条简介。");
     await page.getByRole("button", { name: "提交审核" }).click();
     await expect(page.getByTestId("submit-success")).toContainText("等待审核");
     await first.goto("/review");
@@ -59,7 +59,7 @@ test("管理员签发邀请、编者注册与双人受理，恢复密码使旧�
     await page.getByRole("button", { name: "登出" }).click();
     await page.goto("/terms");
     await page.getByRole("link", { name: title, exact: true }).click();
-    await expect(page.getByText("两名管理员受理后可见的正文。")).toBeVisible();
+    await expect(page.getByText("两名管理员受理后可见的词条简介。")).toBeVisible();
     await page.goto("/login");
     await page.getByLabel("邮箱", { exact: true }).fill(email);
     await page.getByLabel("密码", { exact: true }).fill(password);

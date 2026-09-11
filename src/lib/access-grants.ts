@@ -2,10 +2,12 @@ import "server-only";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { hashPassword } from "better-auth/crypto";
 import { z } from "zod";
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { getDb, type Db } from "@/db";
 import { accessGrants, account, session, user } from "@/db/schema";
 import { CREDENTIAL_ISSUER } from "@/lib/credential";
+import { administratorRoles, hasAdminRole } from "@/lib/roles";
+import { lockRoleManagement } from "@/lib/role-lock";
 
 type Purpose = "invitation" | "reset";
 export class AccessError extends Error {
@@ -39,12 +41,18 @@ async function consume(tx: Tx, purpose: Purpose, token: string) {
 export async function issueGrant(purpose: Purpose, issuedBy: string, targetUserId?: string) {
   const token = randomBytes(32).toString("base64url");
   const expiresAt = new Date(Date.now() + lifetime(purpose));
-  if (purpose === "reset") {
-    const [target] = await getDb().select({ id: user.id }).from(user).where(eq(user.id, targetUserId ?? ""));
-    if (!target) throw new AccessError("找不到目标账号", 404);
-  }
-  const [grant] = await getDb().insert(accessGrants).values({ purpose, issuedBy, targetUserId: purpose === "reset" ? targetUserId : null, digest: digest(purpose, token), expiresAt }).returning({ id: accessGrants.id });
-  return { id: grant.id, token, expiresAt };
+  return getDb().transaction(async tx => {
+    await lockRoleManagement(tx);
+    const [issuer] = await tx.select({ role: user.role }).from(user).where(eq(user.id, issuedBy));
+    if (!hasAdminRole(issuer?.role)) throw new AccessError("需要管理员角色", 403);
+    if (purpose === "reset") {
+      const [target] = await tx.select({ role: user.role }).from(user).where(eq(user.id, targetUserId ?? ""));
+      if (!target) throw new AccessError("找不到目标账号", 404);
+      if (target.role === "superadmin" && issuer.role !== "superadmin") throw new AccessError("恢复超级管理员需要超级管理员权限", 403);
+    }
+    const [grant] = await tx.insert(accessGrants).values({ purpose, issuedBy, targetUserId: purpose === "reset" ? targetUserId : null, digest: digest(purpose, token), expiresAt }).returning({ id: accessGrants.id });
+    return { id: grant.id, token, expiresAt };
+  });
 }
 export async function listGrants() {
   return getDb().select({ id: accessGrants.id, purpose: accessGrants.purpose, targetUserId: accessGrants.targetUserId, createdAt: accessGrants.createdAt, expiresAt: accessGrants.expiresAt, consumedAt: accessGrants.consumedAt, revokedAt: accessGrants.revokedAt }).from(accessGrants).orderBy(desc(accessGrants.createdAt)).limit(100);
@@ -82,7 +90,11 @@ export async function resetWithGrant(input: Record<string, unknown>) {
   const token = tokenInput(input.token);
   const password = passwordInput(input.password);
   await getDb().transaction(async tx => {
+    await lockRoleManagement(tx);
     const grant = await consume(tx, "reset", token);
+    const [issuer] = await tx.select({ role: user.role }).from(user).where(eq(user.id, grant.issuedBy ?? ""));
+    const [target] = await tx.select({ role: user.role }).from(user).where(eq(user.id, grant.targetUserId ?? ""));
+    if (!hasAdminRole(issuer?.role) || !target || (target.role === "superadmin" && issuer.role !== "superadmin")) throw new AccessError("恢复资格已失效，请联系管理员", 403);
     await replacePassword(tx, grant.targetUserId!, await hashPassword(password));
   });
 }
@@ -90,7 +102,8 @@ export async function resetWithGrant(input: Record<string, unknown>) {
 export async function recoverAdministrator(db: Db, id: string, email: string, newPassword: unknown) {
   const password = await hashPassword(passwordInput(newPassword));
   await db.transaction(async tx => {
-    const [target] = await tx.select().from(user).where(and(eq(user.id, id), eq(user.email, email), eq(user.role, "admin"))).for("update");
+    await lockRoleManagement(tx);
+    const [target] = await tx.select().from(user).where(and(eq(user.id, id), eq(user.email, email), inArray(user.role, [...administratorRoles]))).for("update");
     if (!target) throw new AccessError("RECOVERY_TARGET: exact administrator ID and email required");
     await replacePassword(tx, id, password);
     await tx.update(accessGrants).set({ revokedAt: new Date() }).where(and(eq(accessGrants.targetUserId, id), isNull(accessGrants.consumedAt), isNull(accessGrants.revokedAt)));

@@ -14,7 +14,7 @@ test("全站图谱页：画布渲染、学派图例、缩放拖拽冒烟", async
 
   // 学派配色图例（HTML 渲染，含种子学派与未归属项）
   await expect(page.getByTestId("graph-legend")).toContainText("精神分析");
-  await expect(page.getByTestId("graph-legend")).toContainText("未归属学派");
+  await expect(page.getByTestId("graph-legend")).toContainText("暂无学派成员视角");
 
   // 缩放 + 拖拽冒烟：画布保持响应（无渲染卡死）
   const canvas = page.getByTestId("graph-canvas");

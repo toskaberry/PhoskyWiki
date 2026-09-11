@@ -38,8 +38,8 @@ async function inventory() {
   const identity = (await db.query("select current_database() as database")).rows[0];
   if (identity.database !== "phoskywiki") throw Error("Database identity mismatch");
   const rows = (await db.query(`select p.id,p.type,p.title,p.slug,p.deleted_at,t.aliases,t.summary,
-    i.is_editorial_board,v.term_id,v.interpreter_id,r.id as revision_id,r.content,r.snapshot
-    from pages p left join terms t on t.page_id=p.id left join interpreters i on i.page_id=p.id
+    v.term_id,v.interpreter_id,r.id as revision_id,r.content,r.snapshot
+    from pages p left join terms t on t.page_id=p.id
     left join perspectives v on v.page_id=p.id
     left join lateral (select id,content,snapshot from revisions where page_id=p.id order by created_at desc,id desc limit 1) r on true
     order by p.id`)).rows;
@@ -143,8 +143,7 @@ try {
     const visible = await (await request(`/api/pages/${probe.id}/history`)).json();
     if (visible.page.title !== probe.title || visible.revisions[0]?.id !== probe.revision_id) throw Error("Site and database inventory differ");
     const hegel = initial.rows.filter(p => p.type === "interpreter" && p.title === "黑格尔" && !p.deleted_at);
-    const board = initial.rows.filter(p => p.is_editorial_board && !p.deleted_at);
-    if (hegel.length !== 1 || board.length !== 1) throw Error("Expected one existing Hegel and one editorial board interpreter");
+    if (hegel.length !== 1) throw Error("Expected one existing Hegel interpreter");
     const termIds = new Map();
     for (const c of payloads) {
       const rows = (await inventory()).rows;
@@ -166,14 +165,13 @@ try {
       const item = { key: c.key, title: c.title, status: c.status, termId, termHref: `/term/${row.slug}-${termId}` };
       if (c.status === "substantive") {
         item.hegel = await publishPerspective(c, termId, hegel[0].id, c.content);
-        item.board = await publishPerspective(c, termId, board[0].id, c.boardContent);
       }
       review.push(item);
       save("review-index.json", review);
       console.log(JSON.stringify({ title: c.title, status: c.status }));
     }
     writeFileSync(join(root, "review-index.md"), "# 《小逻辑》A．质试点评阅\n\n逐篇评阅尚待用户完成。\n\n" + review.map(c =>
-      `- [${c.title}](${base}${c.termHref})${c.hegel ? ` · [黑格尔视角](${base}${c.hegel.href}) · [编委会说明](${base}${c.board.href})` : " · 仅概念页"}`).join("\n") + "\n");
+      `- [${c.title}](${base}${c.termHref})${c.hegel ? ` · [黑格尔视角](${base}${c.hegel.href})` : " · 仅概念页"}`).join("\n") + "\n");
     save("after-inventory.json", await inventory());
   } else {
     const review = JSON.parse(readFileSync(join(root, "review-index.json"), "utf8"));
@@ -182,7 +180,7 @@ try {
     for (const item of review) {
       const page = await request(item.termHref);
       if (!(await page.text()).includes(item.title)) throw Error(`Term missing: ${item.title}`);
-      for (const view of [item.hegel, item.board].filter(Boolean)) {
+      for (const view of [item.hegel].filter(Boolean)) {
         const history = await (await request(`/api/pages/${view.pageId}/history`)).json();
         if (history.revisions[0].content !== view.expectedContent) throw Error(`Stored content differs: ${item.title}`);
         await request(view.href);

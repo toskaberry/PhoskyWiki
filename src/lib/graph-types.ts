@@ -4,8 +4,8 @@
 // 图谱是 links 表的派生视图（ADR-0003 #4：反链/图谱/热度排序共用 links 表）：
 //   - 节点 = 在线词条；视角正文的双链把「词条 × 词条」连成边；
 //   - 边为无向聚合（同一对词条的双链数合计为权重），节点热度 = 触边权重之和；
-//   - 学派着色是派生数据：节点颜色取「成员视角最多的学派」（学派只组织诠释者，
-//     不直接挂词条——强弱类型边界，见 schema.ts 注释）。
+//   - 饼图由各学派成员视角计数派生；学派只组织诠释者，
+//     不直接挂词条——强弱类型边界，见 schema.ts 注释。
 
 /** 图谱节点：一个在线词条。 */
 export interface GraphNode {
@@ -21,6 +21,8 @@ export interface GraphNode {
   perspectiveCount: number;
   /** 主导学派 page id；无学派成员视角的词条为 null */
   schoolId: number | null;
+  /** 各学派成员的在线视角计数，可交叉；不是概念归属比例。 */
+  schoolAffinities: { schoolId: number; count: number }[];
 }
 
 /** 图谱边：两词条间的无向聚合连接（source < target）。 */
@@ -71,5 +73,5 @@ export const SCHOOL_PALETTE = [
 
 export const UNSCHOOLED_COLOR = "#94a3b8";
 
-/** 未归属学派的图例名（ECharts 分类名，词条页与全站页共用）。 */
-export const UNSCHOOLED_LABEL = "未归属学派";
+/** 缺少学派成员视角的词条图例名，词条页与全站页共用。 */
+export const UNSCHOOLED_LABEL = "暂无学派成员视角";

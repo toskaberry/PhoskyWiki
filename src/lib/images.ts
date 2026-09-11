@@ -1,3 +1,4 @@
+import { hasAdminRole } from "@/lib/roles";
 import "server-only";
 import { randomUUID } from "node:crypto";
 import { eq, inArray, sql } from "drizzle-orm";
@@ -56,7 +57,7 @@ export async function completeImageUpload(id: string, actor: Actor) {
       // 新 key 从不发 PUT 签名。CopySourceIfMatch 保证冻结的正是刚校验的对象。
       const objectKey = `images/${randomUUID()}`;
       await store.copy(row.stagingKey, objectKey, metadata.etag);
-      await tx.update(images).set({ objectKey, publishedAt: actor.role === "admin" ? new Date() : null }).where(eq(images.id, id));
+      await tx.update(images).set({ objectKey, publishedAt: hasAdminRole(actor.role) ? new Date() : null }).where(eq(images.id, id));
     }
     return { id, src: `/api/images/${id}` };
   });
@@ -65,7 +66,7 @@ export async function completeImageUpload(id: string, actor: Actor) {
 export async function imageReadUrl(id: string, actor: Actor | null) {
   if (!IMAGE_ID.test(id)) throw new ImageError(404, "图片不存在");
   const [row] = await getDb().select().from(images).where(eq(images.id, id));
-  if (!row?.objectKey || (!row.publishedAt && actor?.id !== row.uploadedBy && actor?.role !== "admin")) throw new ImageError(404, "图片不存在");
+  if (!row?.objectKey || (!row.publishedAt && actor?.id !== row.uploadedBy && !hasAdminRole(actor?.role))) throw new ImageError(404, "图片不存在");
   return getObjectStore().presignRead(row.objectKey);
 }
 
@@ -74,7 +75,7 @@ export async function validateImageReferences(db: Db | Tx, content: string, acto
   const ids = imageReferences(content);
   if (!ids.length) return;
   const rows = await db.select().from(images).where(inArray(images.id, ids));
-  if (rows.length !== ids.length || rows.some((row) => !row.objectKey || (!row.publishedAt && row.uploadedBy !== actor.id && actor.role !== "admin"))) throw new ImageError(400, "图片尚未上传完成、不存在或无权引用");
+  if (rows.length !== ids.length || rows.some((row) => !row.objectKey || (!row.publishedAt && row.uploadedBy !== actor.id && !hasAdminRole(actor.role)))) throw new ImageError(400, "图片尚未上传完成、不存在或无权引用");
 }
 
 /** 与修订同一事务发布引用；待审或驳回从不走此路径。 */

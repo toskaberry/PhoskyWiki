@@ -149,7 +149,7 @@ export async function expandInterestedInterpreters(
 
 /** 兴趣可选项（/interests 选择器与个人主页展示共用的三类清单）。 */
 export interface InterestOptions {
-  /** 在线诠释者（编委会视角固定第一，作为兴趣无意义，不提供） */
+  /** 在线诠释者 */
   interpreters: { id: number; name: string }[];
   schools: { id: number; name: string }[];
   /** 主题（分类）；parentName 供 chip 的上级提示（根分类为 null） */
@@ -165,7 +165,6 @@ export async function getInterestOptions(): Promise<InterestOptions> {
   const categoryNameById = new Map(categoryRows.map((row) => [row.id, row.name]));
   return {
     interpreters: interpreterRows
-      .filter((row) => !row.isBoard)
       .map((row) => ({ id: row.pageId, name: row.name })),
     schools: schoolRows.map((row) => ({ id: row.id, name: row.title })),
     categories: categoryRows.map((row) => ({

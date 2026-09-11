@@ -95,14 +95,10 @@ it("数据库写入失败回滚全部账号；恢复约束后可重试", async (
   expect(await run("bootstrap", ["--credentials", credentials])).toMatchObject({ code: 0 });
 }, 30_000);
 
-it("已有半成管理员和同名未标记编委会产生冲突，不擅自修复", async () => {
+it("已有半成管理员产生冲突，不擅自修复", async () => {
   expect(await run("bootstrap", ["--credentials", credentials])).toMatchObject({ code: 0 });
   await db.query('DELETE FROM account WHERE user_id IN (SELECT id FROM "user" WHERE email=$1)', [admins[0].email]);
   expect((await run("bootstrap", ["--credentials", credentials])).output).toContain("ADMIN_CREDENTIAL_CONFLICT");
-  await db.query('DELETE FROM "user"');
-  await db.query("UPDATE interpreters SET is_editorial_board=false");
-  expect((await run("bootstrap", ["--credentials", credentials])).output).toContain("BOARD_CONFLICT");
-  expect((await db.query('SELECT * FROM "user"')).rowCount).toBe(0);
 }, 30_000);
 
 afterAll(async () => {
@@ -112,18 +108,19 @@ afterAll(async () => {
   if (directory) await rm(directory, { recursive: true, force: true });
 });
 
-it("生产进程从空库仅创建真实编委会与两位完整管理员，并发重试保留密码和内容", async () => {
+it("生产进程从空库只创建两位完整管理员，并发重试保留密码和普通内容", async () => {
   const results = await Promise.all([run("bootstrap", ["--credentials", credentials]), run("bootstrap", ["--credentials", credentials])]);
   for (const result of results) {
     expect(result).toMatchObject({ code: 0 });
     for (const editor of admins) expect(result.output).not.toContain(editor.password);
   }
   expect((await db.query('SELECT role FROM "user"')).rows).toEqual([{ role: "admin" }, { role: "admin" }]);
-  expect((await db.query("SELECT type, title FROM pages")).rows).toEqual([{ type: "interpreter", title: "编委会" }]);
-  expect((await db.query("SELECT is_editorial_board FROM interpreters")).rows).toEqual([{ is_editorial_board: true }]);
+  expect((await db.query("SELECT type, title FROM pages")).rows).toEqual([]);
+  expect((await db.query("SELECT * FROM interpreters")).rows).toEqual([]);
   expect((await db.query("SELECT * FROM categories")).rowCount).toBe(0);
   const original = (await db.query('SELECT * FROM account ORDER BY id')).rows;
-  await db.query("UPDATE interpreters SET summary = '已经编写的正文，不允许覆盖'");
+  const ordinary = (await db.query("INSERT INTO pages(type, title, slug) VALUES ('interpreter', '普通诠释者', 'ordinary') RETURNING id")).rows[0];
+  await db.query("INSERT INTO interpreters(page_id, summary) VALUES ($1, '已经编写的正文，不允许覆盖')", [ordinary.id]);
   await writeFile(credentials, JSON.stringify(admins.map(editor => ({ ...editor, password: randomUUID() }))));
   expect(await run("bootstrap", ["--credentials", credentials])).toMatchObject({ code: 0 });
   expect((await db.query('SELECT * FROM account ORDER BY id')).rows).toEqual(original);
@@ -140,5 +137,5 @@ it("演示 seed 在生产环境中拒绝执行，原账号与内容保留", asyn
     for (const editor of admins) expect(result.output).not.toContain(editor.password);
   }
   expect((await db.query('SELECT * FROM account ORDER BY id')).rows).toEqual(before);
-  expect((await db.query("SELECT type FROM pages")).rows).toEqual([{ type: "interpreter" }]);
+  expect((await db.query("SELECT type FROM pages")).rows).toEqual([]);
 }, 30_000);

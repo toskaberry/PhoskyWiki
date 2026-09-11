@@ -1,3 +1,4 @@
+import { administratorRoles, hasAdminRole } from "@/lib/roles";
 // 审核域写路径（T06）：提交状态机 + 两票受理 + 修订快照 + links 重建。
 // 语义按 ADR-0004：
 //   - submissions 存全量提议内容 + base_revision_id（不存 diff，队列页 diff 现算）；
@@ -224,6 +225,7 @@ async function validateSubmissionInput(
     }
     case "new_term":
     case "new_interpreter": {
+      if (input.kind === "new_term" && input.content?.trim()) throw new ReviewError(400, "新词条只接受导航信息；请另行创建具名诠释者视角来提交正文");
       if (input.aliases !== undefined && (!Array.isArray(input.aliases) || input.aliases.some((alias) => typeof alias !== "string") || input.aliases.length > 50)) {
         throw new ReviewError(400, "别名必须是最多 50 项的字符串数组");
       }
@@ -263,7 +265,7 @@ async function validateSubmissionInput(
         keyTexts,
         kind: input.kind,
         pageId: null,
-        content: input.kind === "new_term" ? (input.content ?? "").trim() : "",
+        content: "",
         aliases: input.kind === "new_term" ? [...new Set((input.aliases ?? []).map((a) => a.trim()).filter(Boolean))] : [],
         title,
         summary,
@@ -321,7 +323,7 @@ export async function createSubmission(
     const validated = await validateSubmissionInput(db, input, actor);
     await validateImageReferences(db, validated.content, actor);
 
-    if (actor.role === "admin") {
+    if (hasAdminRole(actor.role)) {
       const applied = await applySubmission(db, { ...validated, submittedBy: actor.id }, "direct");
       const [page] = await db
         .select({ type: pages.type, slug: pages.slug })
@@ -338,7 +340,7 @@ export async function createSubmission(
     const [adminCountRow] = await db
       .select({ count: sql<number>`count(*)`.mapWith(Number) })
       .from(user)
-      .where(eq(user.role, "admin"));
+      .where(inArray(user.role, [...administratorRoles]));
     const quorum = Math.min(2, adminCountRow.count);
     const [row] = await db
       .insert(submissions)
@@ -364,11 +366,12 @@ export async function createSubmission(
 
 /** 整批复用管理员直编管线；任何一项失败都不发布，提交后统一同步搜索。 */
 export async function importPages(inputs: SubmissionInput[], actor: Actor) {
-  if (actor.role !== "admin") throw new ReviewError(403, "需要管理员角色");
+  if (!hasAdminRole(actor.role)) throw new ReviewError(403, "需要管理员角色");
   return transactionWithSearchSync(getDb(), async (tx) => {
     const results = [];
     for (const input of inputs) {
       if (input.kind !== "new_term" && input.kind !== "new_interpreter") throw new ReviewError(400, "只能导入词条与诠释者");
+      if (input.kind === "new_term" && input.content?.trim()) throw new ReviewError(400, "词条导入只接受导航信息；请另行创建具名诠释者视角来提交正文");
       let imported = input;
       if (input.pageId !== undefined) {
         const page = await lockLivePage(tx, requiredInt(input.pageId, "pageId 必须是正整数"));
@@ -434,7 +437,7 @@ export async function reviewSubmission(
   action: "approve" | "reject",
   reason?: string,
 ): Promise<ReviewOutcome> {
-  if (actor.role !== "admin") throw new ReviewError(403, "需要管理员角色");
+  if (!hasAdminRole(actor.role)) throw new ReviewError(403, "需要管理员角色");
   const db = getDb();
 
   return transactionWithSearchSync(db, async (tx) => {
@@ -664,6 +667,7 @@ async function applySubmission(
       return { pageId: sub.pageId! };
     }
     case "new_term": {
+      if (sub.content.trim()) throw new ReviewError(400, "新词条只接受导航信息；请另行提交视角正文");
       const [page] = await tx
         .insert(pages)
         .values({
@@ -675,13 +679,6 @@ async function applySubmission(
         .returning({ id: pages.id });
       await tx.insert(terms).values({ pageId: page.id, summary: sub.summary ?? "", aliases: sub.aliases ?? [], keyTexts: sub.keyTexts ?? undefined });
       await applyTermMetadataChange(tx, page.id, termSnapshot({ title: sub.title!, summary: sub.summary ?? "", aliases: sub.aliases ?? [], keyTexts: sub.keyTexts ?? undefined }), null, { source: "create", createdBy: sub.submittedBy });
-      if (sub.content) {
-        const [board] = await tx.select({ id: interpreters.pageId }).from(interpreters)
-          .innerJoin(pages, eq(pages.id, interpreters.pageId))
-          .where(and(eq(interpreters.isEditorialBoard, true), isNull(pages.deletedAt))).limit(1);
-        if (!board) throw new ReviewError(409, "请先配置编委会诠释者");
-        await applySubmission(tx, { ...sub, kind: "new_perspective", termId: page.id, interpreterId: board.id });
-      }
       return { pageId: page.id };
     }
     case "new_interpreter": {

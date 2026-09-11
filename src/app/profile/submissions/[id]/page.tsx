@@ -1,3 +1,4 @@
+import { hasAdminRole } from "@/lib/roles";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
@@ -23,7 +24,7 @@ export default async function SubmissionDetailPage({ params }: Props) {
   if (!/^[1-9]\d*$/.test(rawId)) notFound();
   const id = Number(rawId);
   if (!Number.isSafeInteger(id) || id > 2_147_483_647) notFound();
-  const submission = await getMySubmission(user.id, id, user.role === "admin");
+  const submission = await getMySubmission(user.id, id, hasAdminRole(user.role));
   if (!submission) notFound();
 
   const proposedText =

@@ -1,3 +1,4 @@
+import { hasAdminRole } from "@/lib/roles";
 // 新建视角：选词条 × 诠释者，编辑正文后提交进审核队列。
 // 入口在词条页（「撰写视角」，带 term 预选）。
 
@@ -60,7 +61,7 @@ export default async function NewPerspectivePage({ searchParams }: Params) {
       <h1 className="text-2xl font-bold tracking-tight">新建视角</h1>
       <p className="mt-2 text-sm text-muted-foreground">
         视角 =「诠释者 × 词条」的一次完整诠释；同一诠释者对同一词条只能有一个视角。
-        {sessionUser.role === "admin"
+        {hasAdminRole(sessionUser.role)
           ? "管理员提交不经审核，直接产生修订并重建双链。"
           : "提交进入审核队列，需管理员受理后生效。"}
       </p>
@@ -68,10 +69,9 @@ export default async function NewPerspectivePage({ searchParams }: Params) {
       <div className="mt-8">
         <SubmissionForm
           variant="new_perspective"
-          isAdmin={sessionUser.role === "admin"}
+          isAdmin={hasAdminRole(sessionUser.role)}
           terms={terms.map((term) => ({ id: term.id, label: term.title }))}
           interpreters={interpreters
-            .filter((interpreter) => !interpreter.isBoard)
             .map((interpreter) => ({ id: interpreter.pageId, label: interpreter.name }))}
           presetTermId={presetTermId}
           existingPerspectives={existingPerspectives}

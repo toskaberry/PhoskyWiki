@@ -24,8 +24,6 @@ export async function getTermDiscovery(termId: number, selected: InterestSet | n
       interpreterId: p.interpreterId,
       interpreterName: p.interpreterName,
       interpreterHref: pagePath("interpreter", p.interpreterSlug, p.interpreterId),
-      isBoard: p.isBoard,
-      pinned: p.pinned,
       linkCount: p.linkCount,
     })),
     relatedTerms: graph ? await listRelatedTerms(graph, interests, interpreterIds) : [],

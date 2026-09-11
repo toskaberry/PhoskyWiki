@@ -29,6 +29,17 @@ afterAll(async () => {
 });
 
 describe("全站图谱：links 聚合的节点/边（含热度权重、学派着色）", () => {
+  it("全站与局部保留一个词条的多学派成员视角计数", async () => {
+    const graph = await getSiteGraph();
+    const subject = graph.nodes.find(n => n.title === "主体性")!;
+    const psychoanalysis = graph.schools.find(s => s.title === "精神分析")!;
+    expect(subject.schoolAffinities).toContainEqual({ schoolId: psychoanalysis.id, count: 2 });
+    expect(subject.schoolAffinities.length).toBeGreaterThan(1);
+    const local = await getLocalGraph(subject.id, 1);
+    expect(local!.nodes.find(n => n.id === subject.id)!.schoolAffinities).toEqual(subject.schoolAffinities);
+    const usedSchools = new Set(local!.nodes.flatMap(n => n.schoolAffinities.map(a => a.schoolId)));
+    expect(new Set(local!.schools.map(s => s.id))).toEqual(usedSchools);
+  });
   it("种子扩容后 ≥100 词条全在图中，节点可寻址、边无自环且规范化无向", async () => {
     const graph = await getSiteGraph();
 
@@ -175,7 +186,7 @@ describe("词条局部图谱（1~2 跳邻居网络）", () => {
       expect(oneIds.has(await termIdByTitle(title))).toBe(true);
     }
     // 价值 只被其他词条引用，不在一跳内
-    expect(oneIds.has(await termIdByTitle("价值"))).toBe(true);
+    expect(oneIds.has(await termIdByTitle("价值"))).toBe(false);
 
     const twoIds = new Set(twoHop.nodes.map((n) => n.id));
     for (const id of oneIds) expect(twoIds.has(id)).toBe(true);

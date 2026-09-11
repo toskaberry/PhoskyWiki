@@ -86,7 +86,7 @@ test("游客保存本地配置，直连端点并在流结束前看到回答与�
 test("视角页生成有序跨词条阅读路径，引用可跳到视角且未知编号不变为链接", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("link", { name: "主体性", exact: true }).click();
-  await page.getByRole("link", { name: "查看视角页 →" }).click();
+  await page.getByRole("link", { name: "拉康论主体性", exact: true }).click();
   await expect(page).toHaveURL(/\/perspective\//);
   const panel = await configure(page, "https://model.example/v1/");
   let nextTitle = "", perspectiveURL = "";

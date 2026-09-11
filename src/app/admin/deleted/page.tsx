@@ -1,3 +1,4 @@
+import { hasAdminRole } from "@/lib/roles";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { PageAction } from "@/components/page-action";
@@ -10,7 +11,7 @@ export const metadata = { title: "已删除页面" };
 export default async function DeletedPages() {
   const user = await getSessionUser();
   if (!user) redirect("/login?next=/admin/deleted");
-  if (user.role !== "admin") notFound();
+  if (!hasAdminRole(user.role)) notFound();
   const pages = await listDeletedPages(user);
   return <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8">
     <h1 className="text-3xl font-bold">已删除页面</h1>

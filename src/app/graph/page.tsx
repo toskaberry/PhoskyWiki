@@ -20,8 +20,8 @@ export default async function GraphPage() {
     <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8">
       <h1 className="text-3xl font-bold tracking-tight">全站图谱</h1>
       <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-        每个节点是一个词条，连线是视角正文里的双链；节点大小代表双链热度，颜色取该词条的主导学派。
-        滚轮缩放、拖拽平移、点击节点进入词条页。
+        每个节点是一个词条，连线是视角正文里的双链；节点大小代表双链热度，饼图颜色呈现各学派成员视角。
+        群落可以交叠，不代表概念的排他归属。滚轮缩放、拖拽避让，悬停或键盘聚焦查看关联，点击进入词条。
       </p>
       <div className="mt-6">
         <GraphExplorer data={data} />

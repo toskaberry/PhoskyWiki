@@ -1,20 +1,15 @@
-import { fixtureSignUp } from "./auth-fixture";
 // 读路径数据层集成测试：连真实 PG（docker），种子自灌（幂等）。
 // 注意：seedDatabase 会 TRUNCATE 内容表——同批并行的测试文件不得依赖既有内容行
-//（healthz 只碰 pg_extension 与探活路由，不受影响）。T04 的反链/消歧义/置顶
+//（healthz 只碰 pg_extension 与探活路由，不受影响）。反链/同名聚合
 // 测试也放在本文件：共享同一份种子，避免并行 TRUNCATE 互踩。
 
-import { randomUUID } from "node:crypto";
 
 import { eq, inArray, isNotNull, isNull } from "drizzle-orm";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 
-import { DELETE, POST } from "@/app/api/admin/perspectives/[pageId]/pin/route";
-import { auth } from "@/lib/auth";
 import { seedDatabase } from "@/db/seed";
-import { seedAdminAccount } from "@/db/seed-admin";
 import { getDb } from "@/db";
-import { links, pages, perspectives, terms, user } from "@/db/schema";
+import { links, pages, perspectives, terms } from "@/db/schema";
 import {
   getHeadContent,
   getInterpreterDetail,
@@ -26,7 +21,6 @@ import {
   listPerspectivesOfTerm,
   listTerms,
 } from "@/lib/content";
-import { setPerspectivePinned } from "@/lib/pinning";
 import { pagePath } from "@/lib/slug";
 
 beforeAll(async () => {
@@ -52,12 +46,10 @@ describe("种子完整性（T02 验收：≥3 词条、≥3 诠释者、≥4 视
     expect(all.map((t) => t.title)).toContain("主体性");
   });
 
-  it("视角 ≥4：主体性 词条下编委会通俗视角 + 多个诠释者视角", async () => {
+  it("视角 ≥4：主体性 词条下多个具名诠释者视角", async () => {
     const subjectivity = await termIdByTitle("主体性");
     const perspectives = await listPerspectivesOfTerm(subjectivity);
     expect(perspectives.length).toBeGreaterThanOrEqual(4);
-    expect(perspectives[0].isBoard).toBe(true);
-    expect(perspectives[0].interpreterName).toBe("编委会");
     const titles = perspectives.map((p) => p.title);
     expect(titles).toContain("拉康论主体性");
     expect(titles).toContain("福柯论主体性");
@@ -94,13 +86,11 @@ describe("种子完整性（T02 验收：≥3 词条、≥3 诠释者、≥4 视
     expect(targets.get("镜像阶段")).toEqual({ href: "", exists: false });
   });
 
-  it("视角排序：编委会第一，其余按引用热度（links 统计）降序、并列按创建序", async () => {
+  it("视角排序：按引用热度（links 统计）降序、并列按创建序", async () => {
     const subjectivity = await termIdByTitle("主体性");
     const perspectives = await listPerspectivesOfTerm(subjectivity);
-    expect(perspectives[0].isBoard).toBe(true);
-    expect(perspectives.slice(1).every((p) => !p.isBoard)).toBe(true);
 
-    const rest = perspectives.slice(1).map((p) => p.linkCount);
+    const rest = perspectives.map((p) => p.linkCount);
     for (let i = 1; i < rest.length; i++) {
       expect(rest[i - 1]).toBeGreaterThanOrEqual(rest[i]);
     }
@@ -122,13 +112,12 @@ describe("种子完整性（T02 验收：≥3 词条、≥3 诠释者、≥4 视
     });
     try {
       const reordered = await listPerspectivesOfTerm(subjectivity);
-      expect(reordered[0].isBoard).toBe(true);
       // 并列热度 1，按创建序：阿尔都塞（种子早于新增入链目标）在前
-      expect(reordered[1].title).toBe("阿尔都塞论主体性");
-      expect(reordered[2].title).toBe("德勒兹论主体性");
-      expect(reordered[2].linkCount).toBe(1);
-      expect(reordered.slice(3).map((p) => p.linkCount)).toEqual(
-        reordered.slice(3).map(() => 0),
+      expect(reordered[0].title).toBe("阿尔都塞论主体性");
+      expect(reordered[1].title).toBe("德勒兹论主体性");
+      expect(reordered[1].linkCount).toBe(1);
+      expect(reordered.slice(2).map((p) => p.linkCount)).toEqual(
+        reordered.slice(2).map(() => 0),
       );
     } finally {
       await db
@@ -187,7 +176,6 @@ describe("诠释者轴读路径", () => {
     const detail = await getInterpreterDetail(lacanPage.id);
     expect(detail?.birthYear).toBe(1901);
     expect(detail?.deathYear).toBe(1981);
-    expect(detail?.isBoard).toBe(false);
 
     const index = await listPerspectivesOfInterpreter(lacanPage.id);
     expect(index.map((p) => p.title)).toEqual(["拉康论主体性"]);
@@ -199,17 +187,8 @@ describe("诠释者轴读路径", () => {
     expect(perspectiveDetail?.interpreterName).toBe("拉康");
   });
 
-  it("编委会是特殊诠释者", async () => {
-    const db = getDb();
-    const [boardPage] = await db
-      .select({ id: pages.id })
-      .from(pages)
-      .where(eq(pages.title, "编委会"))
-      .limit(1);
-    const detail = await getInterpreterDetail(boardPage.id);
-    expect(detail?.isBoard).toBe(true);
-    // 编委会对每个词条（含统一「价值」词条）都有通俗视角
-    expect((await listPerspectivesOfInterpreter(boardPage.id)).length).toBe(5);
+  it("种子不包含编委会页面", async () => {
+    expect(await getDb().select().from(pages).where(eq(pages.title, "编委会"))).toEqual([]);
   });
 });
 
@@ -219,9 +198,7 @@ describe("反链面板（T04：词条页与视角页共用 links 直查）", () 
     const backlinks = await listBacklinks(subjectivity);
 
     const titles = backlinks.map((b) => b.title);
-    expect(titles).toContain("编委会论异化");
-    expect(titles).toContain("黑格尔论异化");
-    expect(titles).toContain("编委会论价值");
+    expect(titles).toEqual(expect.arrayContaining(["黑格尔论异化", "马尔库塞论意识形态"]));
     for (const item of backlinks) {
       expect(item.termTitle.length).toBeGreaterThan(0);
       // 反链项可寻址：视角页与所属词条页路径都能生成
@@ -261,7 +238,7 @@ describe("反链面板（T04：词条页与视角页共用 links 直查）", () 
     const db = getDb();
     const subjectivity = await termIdByTitle("主体性");
     const before = await listBacklinks(subjectivity);
-    const source = before.find((b) => b.title === "编委会论异化")!;
+    const source = before.find((b) => b.title === "黑格尔论异化")!;
     expect(source).toBeDefined();
 
     await db.update(pages).set({ deletedAt: new Date() }).where(eq(pages.id, source.pageId));
@@ -279,157 +256,19 @@ describe("反链面板（T04：词条页与视角页共用 links 直查）", () 
 });
 
 describe("同名概念在词条内聚合", () => {
-  it("价值只有一个枢纽，编委会视角分章包含两类解释", async () => {
+  it("价值只有一个枢纽，解释由具名视角承载", async () => {
     const matches = (await listTerms()).filter(t => t.title.startsWith("价值"));
     expect(matches.map(t => t.title)).toEqual(["价值"]);
     const viewpoints = await listPerspectivesOfTerm(matches[0].id);
-    expect(viewpoints.filter(p => p.isBoard)).toHaveLength(1);
-    const content = await getHeadContent(viewpoints.find(p => p.isBoard)!.pageId);
-    expect(content).toContain("## 哲学");
-    expect(content).toContain("## 政治经济学");
+    expect(viewpoints.map(p => p.interpreterName)).toEqual(["马克思"]);
+    const content = await getHeadContent(viewpoints[0].pageId);
+    expect(content).toContain("价值");
     const surplus = await termIdByTitle("剩余价值");
-    const board = (await listPerspectivesOfTerm(surplus)).find(p => p.isBoard)!;
-    expect((await getWikiLinkTargets(board.pageId)).get("价值")).toEqual({ exists: true, href: pagePath("term", matches[0].slug, matches[0].id) });
+    const marx = (await listPerspectivesOfTerm(surplus)).find(p => p.interpreterName === "马克思")!;
+    expect((await getWikiLinkTargets(marx.pageId)).get("价值")).toEqual({ exists: true, href: pagePath("term", matches[0].slug, matches[0].id) });
   });
 });
 
-describe("视角置顶（T04：通俗 → 置顶 → 热度）", () => {
-  it("置顶视角紧随通俗视角，取消置顶恢复纯热度序", async () => {
-    const subjectivity = await termIdByTitle("主体性");
-    const foucault = (await listPerspectivesOfTerm(subjectivity)).find(
-      (p) => p.title === "福柯论主体性",
-    )!;
-    expect(foucault.pinned).toBe(false);
-
-    try {
-      expect(await setPerspectivePinned(foucault.pageId, true)).toBe(true);
-      let ordered = await listPerspectivesOfTerm(subjectivity);
-      expect(ordered[0].isBoard).toBe(true);
-      expect(ordered[1].title).toBe("福柯论主体性");
-      expect(ordered[1].pinned).toBe(true);
-      // 置顶之后仍是热度序（阿尔都塞 1 条引用在前）
-      expect(ordered[2].title).toBe("阿尔都塞论主体性");
-      expect(ordered.slice(2).every((p) => !p.pinned)).toBe(true);
-
-      expect(await setPerspectivePinned(foucault.pageId, false)).toBe(true);
-      ordered = await listPerspectivesOfTerm(subjectivity);
-      expect(ordered[0].isBoard).toBe(true);
-      expect(ordered[1].title).toBe("阿尔都塞论主体性");
-      expect(ordered.every((p) => !p.pinned)).toBe(true);
-    } finally {
-      await setPerspectivePinned(foucault.pageId, false);
-    }
-  });
-
-  it("非视角页与不存在页返回 false", async () => {
-    const subjectivity = await termIdByTitle("主体性");
-    expect(await setPerspectivePinned(subjectivity, true)).toBe(false);
-    expect(await setPerspectivePinned(999_999, true)).toBe(false);
-  });
-});
-
-// 管理员置顶 API（主缝 = route handlers 直调）。准入走 T05 会话角色：
-// 未登录 401、editor 403、admin 放行。
-describe("POST/DELETE /api/admin/perspectives/:pageId/pin", () => {
-  const createdEmails: string[] = [];
-
-  afterAll(async () => {
-    // 级联清掉 account/session；user 行按 email 删（内容表种子不碰 user 表）
-    const db = getDb();
-    for (const email of createdEmails) {
-      await db.delete(user).where(eq(user.email, email));
-    }
-  });
-
-  // 建号 + 登录，把响应的 Set-Cookie 拼成 Cookie 头（cookie 名随 better-auth
-  // 配置走，不硬编码）。route handler 直调时 Request 上只有这个头可携带会话。
-  async function loginCookie(role: "editor" | "admin", password: string): Promise<string> {
-    const email = `t04-pin-${randomUUID()}@example.com`;
-    createdEmails.push(email);
-    if (role === "admin") {
-      await seedAdminAccount({ email, password });
-    } else {
-      await fixtureSignUp({ body: { name: "测试编者", email, password } });
-    }
-    const res = await auth.api.signInEmail({
-      body: { email, password },
-      asResponse: true,
-    });
-    return res.headers
-      .getSetCookie()
-      .map((cookie) => cookie.split(";")[0])
-      .join("; ");
-  }
-
-  function pinRequest(pageId: string, method: "POST" | "DELETE", cookie?: string) {
-    return new Request(`http://localhost/api/admin/perspectives/${pageId}/pin`, {
-      method,
-      headers: cookie === undefined ? {} : { cookie },
-    });
-  }
-
-  async function orderOfSubjectivity(): Promise<string[]> {
-    const subjectivity = await termIdByTitle("主体性");
-    return (await listPerspectivesOfTerm(subjectivity)).map((p) => p.title);
-  }
-
-  async function foucaultPageId(): Promise<number> {
-    const subjectivity = await termIdByTitle("主体性");
-    const foucault = (await listPerspectivesOfTerm(subjectivity)).find(
-      (p) => p.title === "福柯论主体性",
-    )!;
-    return foucault.pageId;
-  }
-
-  it("未登录（无会话 cookie）401，不做任何变更", async () => {
-    const pageId = String(await foucaultPageId());
-    const res = await POST(pinRequest(pageId, "POST"), {
-      params: Promise.resolve({ pageId }),
-    });
-    expect(res.status).toBe(401);
-    expect((await orderOfSubjectivity())[1]).not.toBe("福柯论主体性");
-  });
-
-  it("editor 会话 403；admin 会话置顶/取消置顶生效", async () => {
-    const editorCookie = await loginCookie("editor", "editor-pass-123");
-    const adminCookie = await loginCookie("admin", "admin-pass-123");
-    const pageId = String(await foucaultPageId());
-    const ctx = { params: Promise.resolve({ pageId }) };
-
-    const forbidden = await POST(pinRequest(pageId, "POST", editorCookie), ctx);
-    expect(forbidden.status).toBe(403);
-    expect((await orderOfSubjectivity())[1]).not.toBe("福柯论主体性");
-
-    try {
-      const ok = await POST(pinRequest(pageId, "POST", adminCookie), ctx);
-      expect(ok.status).toBe(204);
-      expect((await orderOfSubjectivity())[1]).toBe("福柯论主体性");
-
-      const undone = await DELETE(pinRequest(pageId, "DELETE", adminCookie), ctx);
-      expect(undone.status).toBe(204);
-      expect((await orderOfSubjectivity())[1]).not.toBe("福柯论主体性");
-    } finally {
-      await setPerspectivePinned(Number(pageId), false);
-    }
-  });
-
-  it("admin 会话下：非视角页 404；非法 id 400", async () => {
-    const adminCookie = await loginCookie("admin", "admin-pass-123");
-    const subjectivity = await termIdByTitle("主体性");
-    const termRes = await POST(pinRequest(String(subjectivity), "POST", adminCookie), {
-      params: Promise.resolve({ pageId: String(subjectivity) }),
-    });
-    expect(termRes.status).toBe(404);
-
-    const badRes = await POST(pinRequest("abc", "POST", adminCookie), {
-      params: Promise.resolve({ pageId: "abc" }),
-    });
-    expect(badRes.status).toBe(400);
-  });
-});
-
-// 软删除对读路径计数的影响（ADR-0003 #7 回归）：
-// 软删除的视角不得计入任何计数——词条视角数、消歧义成员计数、热度引用数。
 describe("软删除视角不出现在任何计数里", () => {
   async function termRow(title: string) {
     const row = (await listTerms()).find((t) => t.title === title);

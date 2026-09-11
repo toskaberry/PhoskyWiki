@@ -25,7 +25,7 @@ for (const parent of ["term", "interpreter"] as const) {
     expect((await fixtureRegister(page.request, { data: {
       email: `combined-${token}@example.com`, name: "组合验收编者", password: "password123",
     } })).ok()).toBe(true);
-    const term = await submit(request, { kind: "new_term", title: `组合父词条 ${token}`, content: "入门正文" });
+    const term = await submit(request, { kind: "new_term", title: `组合父词条 ${token}` });
     const interpreter = await submit(request, { kind: "new_interpreter", title: `组合诠释者 ${token}` });
     const content = `恢复后保留的完整提案 ${token}`;
     const old = await submit(page.request, { kind: "new_perspective", termId: term.pageId, interpreterId: interpreter.pageId, content });
@@ -85,7 +85,9 @@ for (const hidden of ["perspective", "term", "interpreter"] as const) {
     const target = await submit(request, { kind: "new_term", title });
     const interpreter = await submit(request, { kind: "new_interpreter", title: name });
     const perspective = await submit(request, { kind: "new_perspective", termId: target.pageId, interpreterId: interpreter.pageId, content: "兴趣匹配正文" });
-    const source = await submit(request, { kind: "new_term", title: `兴趣起点 ${token}`, content: `[[${title}|兴趣目标@${name}]]` });
+    const source = await submit(request, { kind: "new_term", title: `兴趣起点 ${token}` });
+    const sourceInterpreter = await submit(request, { kind: "new_interpreter", title: `兴趣起点诠释者 ${token}` });
+    const sourcePerspective = await submit(request, { kind: "new_perspective", termId: source.pageId, interpreterId: sourceInterpreter.pageId, content: `[[${title}|兴趣目标@${name}]]` });
     const hiddenId = { perspective: perspective.pageId, term: target.pageId, interpreter: interpreter.pageId }[hidden];
     await page.goto("/interests");
     await page.getByLabel(name, { exact: true }).check();
@@ -101,11 +103,13 @@ for (const hidden of ["perspective", "term", "interpreter"] as const) {
       await manage(request, hiddenId, "delete");
       await page.reload();
       await expect(related.getByRole("link", { name: title, exact: true })).toHaveCount(0);
+      await page.goto(sourcePerspective.href);
       await expect(page.locator(".wiki-content .wiki-link--unavailable")).toHaveText("兴趣目标");
       expect((await (await page.request.get(discovery)).json()).relatedTerms).toEqual([]);
       await manage(request, hiddenId, "restore");
-      await page.reload();
+      await page.goto(source.href);
       await expect(related.getByRole("link", { name: title, exact: true })).toBeVisible();
+      await page.goto(sourcePerspective.href);
       await expect(page.locator(".wiki-content a.wiki-link")).toHaveAttribute("href", perspective.href);
       expect((await (await page.request.get(discovery)).json()).relatedTerms).toEqual([
         expect.objectContaining({ id: target.pageId, interestMatchCount: 1 }),
