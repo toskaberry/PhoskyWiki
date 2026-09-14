@@ -58,3 +58,25 @@ export function DeletePageComment({ id }: { id: number }) {
     {error && <p role="alert" className="mt-1 text-sm text-destructive">{error}</p>}
   </div>;
 }
+
+export function AgreePageComment({ id, agreed }: { id: number; agreed: boolean }) {
+  const router = useRouter();
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState("");
+  return <span className="inline-flex items-center gap-2">
+    <button type="button" aria-pressed={agreed} disabled={pending}
+      className="text-xs text-muted-foreground hover:text-foreground disabled:opacity-50"
+      onClick={async () => {
+        if (pending) return;
+        setPending(true); setError("");
+        try {
+          // API 为幂等设定语义：未赞同则 POST 赞同、已赞同则 DELETE 取消
+          await writeComment(`/api/comments/${id}/agree`, agreed ? "DELETE" : "POST");
+          router.refresh();
+        }
+        catch (error) { setError(error instanceof Error ? error.message : "网络错误，请重试"); }
+        finally { setPending(false); }
+      }}>{agreed ? "已赞同" : "赞同"}</button>
+    {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
+  </span>;
+}

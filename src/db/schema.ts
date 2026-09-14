@@ -585,6 +585,26 @@ export const pageComments = pgTable("page_comments", {
   check("page_comments_content_length", sql`char_length(${t.content}) between 1 and 2000`),
 ]);
 
+/**
+ * 赞同目标类型：页面评论先行（本工单），划线感想随后续工单扩展同一机制；
+ * 多态目标不做外键，目标存在性与可赞同性由应用层按目标类型校验。
+ */
+export const agreeTargetEnum = pgEnum("agree_target", ["page_comment"] as const);
+
+/**
+ * 赞同：一行 = 一个用户对一个目标的认可，撤销即删行（spec 0009 Q23/Q27）。
+ * (用户, 目标) 复合主键保证唯一、重复请求不重复计数；回复不设赞同（没有对应目标类型）。
+ */
+export const agrees = pgTable("agrees", {
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  targetType: agreeTargetEnum("target_type").notNull(),
+  targetId: integer("target_id").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, t => [
+  primaryKey({ name: "agrees_pk", columns: [t.userId, t.targetType, t.targetId] }),
+  index("agrees_target_idx").on(t.targetType, t.targetId),
+]);
+
 /** T15：上传先落暂存对象；完成后冻结至独立 key，受理只发布冻结对象。 */
 export const images = pgTable("images", {
   id: text("id").primaryKey(),

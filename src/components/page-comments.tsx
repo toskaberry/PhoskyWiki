@@ -1,17 +1,18 @@
 import Link from "next/link";
 import { listPageComments } from "@/lib/page-comments";
-import { PageCommentComposer, DeletePageComment } from "@/components/page-comment-actions";
+import { AgreePageComment, PageCommentComposer, DeletePageComment } from "@/components/page-comment-actions";
 
 export async function PageComments({ pageId, href, title, userId }: {
   pageId: number; href: string; title: string; userId?: string;
 }) {
-  const comments = await listPageComments(pageId);
+  const comments = await listPageComments(pageId, userId);
+  const loginRedirect = `/login?redirect=${encodeURIComponent(`${href}#comments`)}`;
   return <section id="comments" aria-label={title} className="mt-10 scroll-mt-8 border-t border-border pt-6">
     <h2 className="text-xl font-semibold">{title}</h2>
-    <p className="mt-1 text-sm text-muted-foreground">{comments.length} 条评论 · 最新发表在前</p>
+    <p className="mt-1 text-sm text-muted-foreground">{comments.length} 条评论 · 按赞同数排序，同票新在前</p>
     <div className="mt-4 hidden md:block">
       {userId ? <PageCommentComposer pageId={pageId} /> : <p className="text-sm text-muted-foreground">
-        <Link href={`/login?redirect=${encodeURIComponent(`${href}#comments`)}`} className="text-primary hover:underline">登录</Link>后即可发表评论。
+        <Link href={loginRedirect} className="text-primary hover:underline">登录</Link>后即可发表评论。
       </p>}
     </div>
     <p className="mt-4 text-sm text-muted-foreground md:hidden">移动端仅供阅读，请在桌面端发表评论。</p>
@@ -24,6 +25,13 @@ export async function PageComments({ pageId, href, title, userId }: {
               {comment.createdAt.toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" })}
             </time>
             {userId === comment.authorId && <DeletePageComment id={comment.id} />}
+            <div className="ml-auto flex items-center gap-3 text-xs text-muted-foreground">
+              <span>{comment.agreeCount} 赞同</span>
+              {userId !== comment.authorId && <span className="hidden md:inline">
+                {userId ? <AgreePageComment id={comment.id} agreed={comment.agreed} />
+                  : <Link href={loginRedirect} title="登录后可赞同" className="hover:text-foreground">赞同</Link>}
+              </span>}
+            </div>
           </div>
           <p className="mt-2 whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-sm leading-relaxed">{comment.content}</p>
         </li>)}
