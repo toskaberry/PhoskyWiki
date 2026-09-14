@@ -141,6 +141,13 @@
       "when": 1789115251436,
       "tag": "0019_equal_perspectives",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1789370308235,
+      "tag": "0020_third_luckman",
+      "breakpoints": true
     }
   ]
 }

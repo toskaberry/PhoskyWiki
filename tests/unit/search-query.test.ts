@@ -67,8 +67,9 @@ describe("searchHitHref 与标签表", () => {
     expect(searchHitHref({ type: "discussion", slug: "d", pageId: discussionDocId(9) })).toBe("/term/d/discussion#floor-9");
   });
 
-  it("四个类型维度都有中文标签（含预留的讨论）", () => {
-    expect(SEARCH_TYPES.length).toBe(4);
+  it("搜索类型包含页面评论并提供中文标签", () => {
+    expect(SEARCH_TYPES).toContain("comment");
+    expect(SEARCH_TYPE_LABELS.comment).toBe("页面评论");
     expect(SEARCH_TYPE_LABELS.discussion).toBe("讨论");
   });
 });

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PageComments } from "@/components/page-comments";
 import { AgentPanel } from "@/components/agent-panel";
 import { HistoryLink } from "@/components/history-link";
 import { notFound } from "next/navigation";
@@ -145,6 +146,7 @@ export default async function PerspectivePage({ params }: Params) {
           </p>
         </div>
       </div>
+      <PageComments pageId={page.id} href={pagePath("perspective", page.slug, page.id)} title="视角评论" userId={sessionUser?.id} />
     </main>
   );
 }

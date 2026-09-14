@@ -2,24 +2,27 @@ import "server-only";
 
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { getDb } from "@/db";
-import { discussionPosts, pages } from "@/db/schema";
+import { discussionPosts, pageComments, pages } from "@/db/schema";
 import { isPageVisible } from "@/lib/page-visibility";
 import { getSearchIndex } from "@/lib/search/search-service";
-import { discussionDocId, discussionPostId, type SearchHit, type SearchQueryOptions } from "@/lib/search/search-types";
+import { commentDocId, pageCommentId, discussionDocId, discussionPostId, type SearchHit, type SearchQueryOptions } from "@/lib/search/search-types";
 
 /** 索引同步可失败或延迟；公开内容始终由 PG 的当前可见性兜底。 */
 async function visibleHits(hits: SearchHit[]): Promise<SearchHit[]> {
   if (!hits.length) return [];
-  const pageIds = hits.filter((hit) => hit.type !== "discussion").map((hit) => hit.pageId);
+  const pageIds = hits.filter((hit) => hit.type !== "discussion" && hit.type !== "comment").map((hit) => hit.pageId);
   const postIds = hits.filter((hit) => hit.type === "discussion").map((hit) => discussionPostId(hit.pageId));
-  const [livePages, livePosts] = await Promise.all([
+  const commentIds = hits.filter(hit => hit.type === "comment").map(hit => pageCommentId(hit.pageId));
+  const [livePages, livePosts, liveComments] = await Promise.all([
     pageIds.length ? getDb().select({ id: pages.id }).from(pages)
       .where(and(inArray(pages.id, pageIds), isPageVisible(pages.id))) : [],
     postIds.length ? getDb().select({ id: discussionPosts.id }).from(discussionPosts)
       .innerJoin(pages, eq(pages.id, discussionPosts.termId))
       .where(and(inArray(discussionPosts.id, postIds), isNull(discussionPosts.deletedAt), isPageVisible(pages.id))) : [],
+    commentIds.length ? getDb().select({ id: pageComments.id }).from(pageComments)
+      .where(and(inArray(pageComments.id, commentIds), isPageVisible(pageComments.pageId))) : [],
   ]);
-  const ids = new Set([...livePages.map((row) => row.id), ...livePosts.map((row) => discussionDocId(row.id))]);
+  const ids = new Set([...livePages.map((row) => row.id), ...livePosts.map((row) => discussionDocId(row.id)), ...liveComments.map(row => commentDocId(row.id))]);
   return hits.filter((hit) => ids.has(hit.pageId));
 }
 

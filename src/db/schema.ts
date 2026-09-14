@@ -573,6 +573,18 @@ export const termDiscussions = pgTable("term_discussions", {
   lockedBy: text("locked_by").references(() => user.id),
 });
 
+/** 页面评论分别归属词条或视角；允许的页面类型由写入边界校验。 */
+export const pageComments = pgTable("page_comments", {
+  id: serial("id").primaryKey(),
+  pageId: integer("page_id").notNull().references(() => pages.id, { onDelete: "cascade" }),
+  authorId: text("author_id").notNull().references(() => user.id),
+  content: text("content").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, t => [
+  index("page_comments_page_created_idx").on(t.pageId, t.createdAt, t.id),
+  check("page_comments_content_length", sql`char_length(${t.content}) between 1 and 2000`),
+]);
+
 /** T15：上传先落暂存对象；完成后冻结至独立 key，受理只发布冻结对象。 */
 export const images = pgTable("images", {
   id: text("id").primaryKey(),
