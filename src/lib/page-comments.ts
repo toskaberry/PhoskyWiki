@@ -1,9 +1,10 @@
 import "server-only";
 import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { getDb, type Db } from "@/db";
-import { agrees, pageComments, pages, replies, user } from "@/db/schema";
+import { agrees, pageComments, pages, perspectives, replies, user } from "@/db/schema";
 import { hasAdminRole } from "@/lib/roles";
 import { isPageVisible } from "@/lib/page-visibility";
+import { termLockedAt } from "@/lib/discussion";
 import { queueCommentSync, transactionWithSearchSync } from "@/lib/search/search-sync";
 
 type Reader = Pick<Db, "select">;
@@ -23,11 +24,40 @@ export function commentId(value: unknown): number {
   return id;
 }
 
+/** 评论页的治理词条：词条页即自身，视角页为其所属词条（版务锁定按词条判定）。 */
+async function commentPageTermId(db: Reader, pageId: number): Promise<number | null> {
+  const [row] = await db.select({
+    termId: sql<number | null>`case when ${pages.type} = 'term' then ${pages.id} else ${perspectives.termId} end`,
+  }).from(pages).leftJoin(perspectives, eq(perspectives.pageId, pages.id))
+    .where(and(eq(pages.id, pageId), inArray(pages.type, ["term", "perspective"]), isPageVisible(pages.id)));
+  return row?.termId ?? null;
+}
+
 export async function requireCommentPage(db: Reader, pageId: number) {
-  const [page] = await db.select({ id: pages.id }).from(pages).where(and(
-    eq(pages.id, pageId), inArray(pages.type, ["term", "perspective"]), isPageVisible(pages.id),
-  ));
-  if (!page) throw new PageCommentError(404, "页面不存在或不可评论");
+  if (await commentPageTermId(db, pageId) === null) {
+    throw new PageCommentError(404, "页面不存在或不可评论");
+  }
+}
+
+/**
+ * 写路径准入：页面在线且所属词条未被版务锁定（#71 版务锁定）。
+ * 锁定沿用词条锁定表（term_discussions），对任何角色（含管理员）关闭
+ * 新增评论与回复；已有内容可读不受影响，划线感想不走此判定。
+ */
+async function requireCommentablePage(db: Reader, pageId: number) {
+  const termId = await commentPageTermId(db, pageId);
+  if (termId === null) throw new PageCommentError(404, "页面不存在或不可评论");
+  if (await termLockedAt(db, termId) !== null) {
+    throw new PageCommentError(403, "词条评论已被版务锁定，暂不能发言");
+  }
+}
+
+/** 评论区的版务状态（词条/视角页渲染入口用）：治理词条与锁定标志。 */
+export async function commentSectionState(pageId: number): Promise<{ termId: number; locked: boolean }> {
+  const db = getDb();
+  const termId = await commentPageTermId(db, pageId);
+  if (termId === null) throw new PageCommentError(404, "页面不存在或不可评论");
+  return { termId, locked: (await termLockedAt(db, termId)) !== null };
 }
 
 /** 赞同计数的关联子查询（列出与排序共用同一口径）。 */
@@ -108,7 +138,7 @@ export async function createPageComment(pageId: number, input: unknown, authorId
   if (typeof input !== "string" || !input.trim()) throw new PageCommentError(400, "评论内容不能为空");
   if (input.length > 2000) throw new PageCommentError(400, "评论内容不能超过 2000 字符");
   return transactionWithSearchSync(getDb(), async tx => {
-    await requireCommentPage(tx, pageId);
+    await requireCommentablePage(tx, pageId);
     const [created] = await tx.insert(pageComments).values({ pageId, authorId, content: input.trim() })
       .returning({ id: pageComments.id });
     queueCommentSync(tx, created.id);
@@ -117,28 +147,33 @@ export async function createPageComment(pageId: number, input: unknown, authorId
 }
 
 /**
- * 作者删除自己的评论（spec 0009 占位语义）：
+ * 删除评论（spec 0009 占位语义 + #71 版务）：作者删自己的评论，
+ * 管理员可处置任何在线评论（删除者留痕记录在 deletedBy）。
  * 仍有回复 → 软删占位，原内容与作者信息不再外发，回复保留可读；
  * 无回复 → 物理移除（连同多态赞同行）。
  * 锁住评论行与回复写入互斥，避免「计数为零即硬删」与并发新回复交错。
  */
-export async function deletePageComment(id: number, authorId: string) {
+export async function deletePageComment(id: number, actorId: string) {
   return transactionWithSearchSync(getDb(), async tx => {
     const [comment] = await tx.select({ authorId: pageComments.authorId, deletedAt: pageComments.deletedAt })
       .from(pageComments).where(eq(pageComments.id, id)).for("update");
     if (!comment) throw new PageCommentError(404, "评论不存在");
-    if (comment.authorId !== authorId) throw new PageCommentError(403, "只能删除自己的评论");
+    const [actor] = await tx.select({ role: user.role }).from(user).where(eq(user.id, actorId));
+    if (!actor) throw new PageCommentError(401, "登录状态无效，请重新登录");
+    if (comment.authorId !== actorId && !hasAdminRole(actor.role)) {
+      throw new PageCommentError(403, "只能删除自己的评论");
+    }
     const [counted] = await tx.select({ count: sql<number>`count(*)::int` }).from(replies)
       .where(and(eq(replies.targetType, "page_comment"), eq(replies.targetId, id)));
     if (counted.count > 0) {
       // 占位已立（重复删除）时幂等成功；软删评论退出搜索索引
       if (comment.deletedAt === null) {
-        await tx.update(pageComments).set({ deletedAt: new Date(), deletedBy: authorId }).where(eq(pageComments.id, id));
+        await tx.update(pageComments).set({ deletedAt: new Date(), deletedBy: actorId }).where(eq(pageComments.id, id));
       }
       queueCommentSync(tx, id);
       return;
     }
-    await tx.delete(pageComments).where(and(eq(pageComments.id, id), eq(pageComments.authorId, authorId)));
+    await tx.delete(pageComments).where(eq(pageComments.id, id));
     // 赞同目标无外键（多态），随评论删除一并清理
     await tx.delete(agrees).where(and(eq(agrees.targetType, "page_comment"), eq(agrees.targetId, id)));
     queueCommentSync(tx, id);
@@ -154,7 +189,7 @@ export async function createPageCommentReply(commentId: number, input: unknown, 
       .from(pageComments).where(eq(pageComments.id, commentId)).for("update");
     // 已删除/占位评论不可再回复
     if (!comment || comment.deletedAt !== null) throw new PageCommentError(404, "评论不存在或已删除，不能回复");
-    await requireCommentPage(tx, comment.pageId);
+    await requireCommentablePage(tx, comment.pageId);
     const [created] = await tx.insert(replies)
       .values({ targetType: "page_comment", targetId: commentId, authorId, content: input.trim() })
       .returning({ id: replies.id });

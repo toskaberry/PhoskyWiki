@@ -51,9 +51,12 @@ export function DeletePostButton({ postId }: { postId: number }) {
 export function LockDiscussionButton({
   termId,
   locked,
+  labels = { lock: "锁定讨论", unlock: "解锁讨论" },
 }: {
   termId: number;
   locked: boolean;
+  /** 同一锁定开关在不同入口的措辞（讨论区页/评论区各用各的标签） */
+  labels?: { lock: string; unlock: string };
 }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
@@ -89,10 +92,10 @@ export function LockDiscussionButton({
         type="button"
         onClick={() => void toggle()}
         disabled={pending}
-        title={locked ? "解锁后恢复发言" : "锁定后任何角色（含管理员）不能发言"}
+        title={locked ? "解锁后恢复发言" : "锁定后该词条讨论区与评论区（含各视角）任何角色（含管理员）不能发言"}
         className="text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline disabled:opacity-50"
       >
-        {pending ? "…" : locked ? "解锁讨论" : "锁定讨论"}
+        {pending ? "…" : locked ? labels.unlock : labels.lock}
       </button>
     </span>
   );

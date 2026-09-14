@@ -1,9 +1,9 @@
 import "dotenv/config";
 import { randomUUID } from "node:crypto";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { expect, test, type Page } from "./fixtures";
 import { getDb } from "../../src/db";
-import { pageComments, pages, replies, user } from "../../src/db/schema";
+import { pageComments, pages, replies, termDiscussions, user } from "../../src/db/schema";
 import { fixtureRegister } from "./auth-fixture";
 
 async function openTerm(page: Page) {
@@ -15,6 +15,12 @@ async function openTerm(page: Page) {
 async function termPageId() {
   const [term] = await getDb().select().from(pages).where(eq(pages.title, "主体性"));
   return term.id;
+}
+
+/** 「主体性」下拉康视角的 page id（种子里固定存在）。 */
+async function lacanPerspectiveId() {
+  const [perspective] = await getDb().select().from(pages).where(eq(pages.title, "拉康论主体性"));
+  return perspective.id;
 }
 
 async function login(page: Page) {
@@ -359,6 +365,92 @@ test("管理员可删除他人回复并显示版务占位", async ({ page, brows
   } finally {
     await getDb().delete(replies).where(and(eq(replies.targetType, "page_comment"), eq(replies.targetId, id)));
     await getDb().delete(pageComments).where(eq(pageComments.id, id));
+    await commenterContext.close();
+  }
+});
+
+test("管理员可软删他人评论：有回复显示占位、无回复直接移除", async ({ page, browser }) => {
+  test.skip(!process.env.SEED_ADMIN_PASSWORD, "需要种子管理员密码");
+  const commenterContext = await browser.newContext();
+  const email = `softdelete-${randomUUID()}@example.com`;
+  expect((await fixtureRegister(commenterContext.request, {
+    data: { name: "软删流程编者", email, password: "reply-test-password" },
+  })).ok()).toBe(true);
+  const pageId = await termPageId();
+  const marker = Date.now();
+  const withReplies = await commenterContext.request.post("/api/comments", { data: { pageId, content: `有回复待软删 ${marker}` } });
+  const { id: withRepliesId } = await (await withReplies.json());
+  expect((await commenterContext.request.post(`/api/comments/${withRepliesId}/replies`, { data: { content: "软删评论下的回复" } })).status()).toBe(201);
+  const bare = await commenterContext.request.post("/api/comments", { data: { pageId, content: `无回复待移除 ${marker}` } });
+  const { id: bareId } = await (await bare.json());
+  try {
+    await login(page);
+    await openTerm(page);
+    const region = page.locator("#comments");
+    // 他人评论的卡片上出现删除入口；删除后呈现与作者删除一致的占位，回复保留可读
+    const placeholderItem = region.locator(`#comment-${withRepliesId}`);
+    await placeholderItem.getByRole("button", { name: "删除评论", exact: true }).click();
+    await expect(placeholderItem.getByText("该评论已删除。", { exact: true })).toBeVisible();
+    await expect(placeholderItem.getByText(`有回复待软删 ${marker}`, { exact: true })).toHaveCount(0);
+    await expect(placeholderItem.getByText("软删评论下的回复", { exact: true })).toBeVisible();
+    // 无回复的评论被版务删除后直接移除，不留占位
+    const bareItem = region.locator(`#comment-${bareId}`);
+    await bareItem.getByRole("button", { name: "删除评论", exact: true }).click();
+    await expect(bareItem).toHaveCount(0);
+  } finally {
+    await getDb().delete(replies).where(and(eq(replies.targetType, "page_comment"), eq(replies.targetId, withRepliesId)));
+    await getDb().delete(pageComments).where(inArray(pageComments.id, [withRepliesId, bareId]));
+    await commenterContext.close();
+  }
+});
+
+test("管理员锁定词条评论：任何角色不能新增、已有内容可读、解锁后恢复", async ({ page, browser }) => {
+  test.skip(!process.env.SEED_ADMIN_PASSWORD, "需要种子管理员密码");
+  const commenterContext = await browser.newContext();
+  const email = `lock-${randomUUID()}@example.com`;
+  expect((await fixtureRegister(commenterContext.request, {
+    data: { name: "锁定流程编者", email, password: "reply-test-password" },
+  })).ok()).toBe(true);
+  const pageId = await termPageId();
+  const marker = Date.now();
+  const created = await commenterContext.request.post("/api/comments", { data: { pageId, content: `锁定前评论 ${marker}` } });
+  const { id } = await created.json();
+  expect((await commenterContext.request.post(`/api/comments/${id}/replies`, { data: { content: "锁定前的回复" } })).status()).toBe(201);
+  let restoredId = 0;
+  try {
+    await login(page);
+    await openTerm(page);
+    const region = page.locator("#comments");
+    const item = region.locator(`#comment-${id}`);
+    // 管理员入口：评论区标题旁的锁定按钮
+    await region.getByRole("button", { name: "锁定评论", exact: true }).click();
+    await expect(region.getByRole("note")).toContainText("本词条评论已被版务锁定");
+    // 发言入口全部撤下：无发表框、无回复入口；已有内容仍可读
+    await expect(region.getByLabel("评论内容")).toHaveCount(0);
+    await expect(region.getByRole("button", { name: "回复", exact: true })).toHaveCount(0);
+    await expect(item.getByText(`锁定前评论 ${marker}`, { exact: true })).toBeVisible();
+    await expect(item.getByText("锁定前的回复", { exact: true })).toBeVisible();
+    // API 层任何角色都不能新增评论与回复（编者与管理员同锁）
+    expect((await commenterContext.request.post("/api/comments", { data: { pageId, content: "锁定后编者发言" } })).status()).toBe(403);
+    expect((await commenterContext.request.post(`/api/comments/${id}/replies`, { data: { content: "锁定后编者回复" } })).status()).toBe(403);
+    expect((await page.request.post("/api/comments", { data: { pageId, content: "锁定后管理员发言" } })).status()).toBe(403);
+    // 锁定覆盖各视角评论区：视角页同样无发言入口
+    await page.getByRole("link", { name: "拉康论主体性" }).first().click();
+    await expect(page.getByRole("heading", { level: 1, name: "拉康论主体性" })).toBeVisible();
+    const perspectiveRegion = page.locator("#comments");
+    await expect(perspectiveRegion.getByRole("note")).toContainText("本词条评论已被版务锁定");
+    await expect(perspectiveRegion.getByLabel("评论内容")).toHaveCount(0);
+    expect((await commenterContext.request.post("/api/comments", { data: { pageId: await lacanPerspectiveId(), content: "锁定后视角评论" } })).status()).toBe(403);
+    // 解锁后发言恢复
+    await perspectiveRegion.getByRole("button", { name: "解锁评论", exact: true }).click();
+    await expect(perspectiveRegion.getByLabel("评论内容")).toBeVisible();
+    const restored = await commenterContext.request.post("/api/comments", { data: { pageId, content: "解锁后恢复发言" } });
+    expect(restored.status()).toBe(201);
+    restoredId = (await restored.json()).id;
+  } finally {
+    await getDb().delete(replies).where(and(eq(replies.targetType, "page_comment"), eq(replies.targetId, id)));
+    await getDb().delete(pageComments).where(inArray(pageComments.id, restoredId ? [id, restoredId] : [id]));
+    await getDb().delete(termDiscussions).where(eq(termDiscussions.termId, pageId));
     await commenterContext.close();
   }
 });

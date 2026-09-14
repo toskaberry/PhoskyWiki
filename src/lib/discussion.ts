@@ -87,14 +87,20 @@ export interface ReplyView {
   authorName: string;
 }
 
-/** 词条讨论区是否被版务锁定（无 term_discussions 行或 lockedAt 为空 = 开放）。 */
-export async function isDiscussionLocked(termId: number): Promise<boolean> {
-  const [row] = await getDb()
+/** 词条版务锁定的行级判定（无 term_discussions 行或 lockedAt 为空 = 开放）。
+ *  讨论区与页面评论共用同一口径；事务内判定传事务句柄。 */
+export async function termLockedAt(db: Pick<Db, "select">, termId: number): Promise<Date | null> {
+  const [row] = await db
     .select({ lockedAt: termDiscussions.lockedAt })
     .from(termDiscussions)
     .where(eq(termDiscussions.termId, termId))
     .limit(1);
-  return (row?.lockedAt ?? null) !== null;
+  return row?.lockedAt ?? null;
+}
+
+/** 词条是否被版务锁定。锁定按词条判定：同时覆盖讨论区楼层与页面评论（总评 + 各视角评论）。 */
+export async function isDiscussionLocked(termId: number): Promise<boolean> {
+  return (await termLockedAt(getDb(), termId)) !== null;
 }
 
 /**
@@ -243,12 +249,7 @@ export async function createDiscussionPost(
     const term = await getLiveTermTx(tx, input.termId);
     if (!term) throw new DiscussionError(404, "词条不存在或已被删除");
 
-    const [state] = await tx
-      .select({ lockedAt: termDiscussions.lockedAt })
-      .from(termDiscussions)
-      .where(eq(termDiscussions.termId, input.termId))
-      .limit(1);
-    if ((state?.lockedAt ?? null) !== null) {
+    if ((await termLockedAt(tx, input.termId)) !== null) {
       throw new DiscussionError(403, "讨论区已被版务锁定，暂不能发言");
     }
 
@@ -337,7 +338,8 @@ export async function softDeleteDiscussionPost(
 }
 
 /**
- * 版务锁定/解锁词条讨论区。锁定后任何角色（含管理员）不能发言，解锁即恢复。
+ * 版务锁定/解锁词条（#71 扩展语义）。锁定后该词条讨论区与页面评论（总评 +
+ * 各视角评论）对任何角色（含管理员）关闭新增，已有内容仍可读，解锁即恢复。
  * 返回 false = 词条不存在或已软删除。
  */
 export async function setDiscussionLocked(

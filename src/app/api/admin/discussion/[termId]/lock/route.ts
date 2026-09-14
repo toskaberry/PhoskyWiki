@@ -1,6 +1,7 @@
-// 版务锁定/解锁词条讨论区（T13）：POST = 锁定，DELETE = 解锁，幂等。
+// 版务锁定/解锁词条（T13，#71 扩展语义）：POST = 锁定，DELETE = 解锁，幂等。
 // 准入见 requireAdminUser（T05 会话角色：登录且 admin）；锁定人记录在
-// term_discussions.locked_by。锁定后任何角色不能发言。
+// term_discussions.locked_by。锁定后该词条讨论区与页面评论（总评 + 各视角评论）
+// 对任何角色（含管理员）关闭新增发言，已有内容仍可读。
 
 import { requireAdminUser } from "@/lib/admin-auth";
 import { setDiscussionLocked } from "@/lib/discussion";

@@ -563,12 +563,13 @@ export const discussionPosts = pgTable(
   ],
 );
 
-/** 词条讨论区的版务状态：一行 = 一个词条的讨论区（锁定时懒创建，缺席即开放；发言不建行）。 */
+/** 词条的版务锁定状态：一行 = 一个词条（锁定时懒创建，缺席即开放；发言不建行）。 */
 export const termDiscussions = pgTable("term_discussions", {
   termId: integer("term_id")
     .primaryKey()
     .references(() => terms.pageId, { onDelete: "cascade" }),
-  // 版务锁定：锁定后任何角色（含管理员）都不能再发言，解锁即恢复
+  // 版务锁定：锁定后该词条讨论区与页面评论（总评 + 各视角评论）对任何角色
+  // （含管理员）关闭新增，解锁即恢复；划线感想不受影响
   lockedAt: timestamp("locked_at", { withTimezone: true }),
   lockedBy: text("locked_by").references(() => user.id),
 });
