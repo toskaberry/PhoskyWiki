@@ -488,13 +488,13 @@ async function buildAllDiscussionDocuments(): Promise<SearchDocument[]> {
   return rows.map(discussionDoc);
 }
 
-/** 评论索引始终从当前在线页面投影；全量与增量采用同一可见性条件。 */
+/** 评论索引始终从当前在线页面投影；全量与增量采用同一可见性条件。软删占位评论退出索引。 */
 async function buildCommentDocuments(ids?: number[]): Promise<SearchDocument[]> {
   const rows = await getDb().select({
     id: pageComments.id, pageId: pages.id, type: pages.type,
     title: pages.title, slug: pages.slug, content: pageComments.content,
   }).from(pageComments).innerJoin(pages, eq(pages.id, pageComments.pageId))
-    .where(and(isPageVisible(pages.id), ids ? inArray(pageComments.id, ids) : undefined));
+    .where(and(isPageVisible(pages.id), isNull(pageComments.deletedAt), ids ? inArray(pageComments.id, ids) : undefined));
   return rows.map(row => ({
     pageId: commentDocId(row.id), type: "comment", title: `「${row.title}」的评论`,
     slug: pagePath(row.type, row.slug, row.pageId), body: row.content,

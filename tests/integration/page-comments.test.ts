@@ -1,13 +1,15 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, expect, it } from "vitest";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { POST } from "@/app/api/comments/route";
 import { GET } from "@/app/api/pages/[pageId]/comments/route";
 import { DELETE } from "@/app/api/comments/[commentId]/route";
 import { POST as AGREE, DELETE as CANCEL_AGREE } from "@/app/api/comments/[commentId]/agree/route";
+import { POST as REPLY } from "@/app/api/comments/[commentId]/replies/route";
+import { DELETE as REMOVE_REPLY } from "@/app/api/replies/[replyId]/route";
 import { auth } from "@/lib/auth";
 import { getDb } from "@/db";
-import { agrees, pages, user } from "@/db/schema";
+import { agrees, pageComments, pages, replies, user } from "@/db/schema";
 import { seedDatabase } from "@/db/seed";
 import { fixtureSignUp } from "./auth-fixture";
 import { FakeSearchIndex } from "@/lib/search/fake-index";
@@ -72,6 +74,29 @@ async function signUpCommenter(name: string) {
   const email = `agree-${randomUUID()}@example.com`;
   const password = "agree-test-password";
   const account = await fixtureSignUp({ body: { name, email, password } });
+  const response = await auth.api.signInEmail({ body: { email, password }, asResponse: true });
+  const session = response.headers.getSetCookie().map(value => value.split(";")[0]).join("; ");
+  return { account, session, cleanup: () => getDb().delete(user).where(eq(user.id, account.user.id)) };
+}
+
+function reply(commentId: number, content: string, session = cookie) {
+  return REPLY(new Request(`http://localhost/api/comments/${commentId}/replies`, {
+    method: "POST", headers: { "content-type": "application/json", cookie: session },
+    body: JSON.stringify({ content }),
+  }), { params: Promise.resolve({ commentId: String(commentId) }) });
+}
+
+function removeReply(id: number, session = cookie) {
+  return REMOVE_REPLY(new Request(`http://localhost/api/replies/${id}`, { method: "DELETE", headers: { cookie: session } }), {
+    params: Promise.resolve({ replyId: String(id) }),
+  });
+}
+
+async function signUpRole(name: string, role: "editor" | "admin") {
+  const email = `reply-${randomUUID()}@example.com`;
+  const password = "reply-test-password";
+  const account = await fixtureSignUp({ body: { name, email, password } });
+  if (role === "admin") await getDb().update(user).set({ role: "admin" }).where(eq(user.id, account.user.id));
   const response = await auth.api.signInEmail({ body: { email, password }, asResponse: true });
   const session = response.headers.getSetCookie().map(value => value.split(";")[0]).join("; ");
   return { account, session, cleanup: () => getDb().delete(user).where(eq(user.id, account.user.id)) };
@@ -211,5 +236,96 @@ it("评论区按赞同数降序、同票按发表时间新→旧排列", async (
   } finally {
     await remove(high.id); await remove(oldZero.id); await remove(newZero.id); await remove(one.id);
     await first.cleanup(); await second.cleanup();
+  }
+});
+
+it("回复随评论返回且按发表时间升序，@ 前缀按纯文本原样展示，校验与游客限制生效", async () => {
+  const { id } = await (await create(termId, "待回复的评论")).json();
+  const other = await signUpRole("回复编者", "editor");
+  try {
+    expect((await reply(id, "游客回复", "")).status).toBe(401);
+    expect((await reply(id, "   ")).status).toBe(400);
+    expect((await reply(id, "字".repeat(2001))).status).toBe(400);
+    expect((await reply(id, "字".repeat(2000))).status).toBe(201);
+    expect((await reply(2147483647, "不存在的评论")).status).toBe(404);
+    const first = await (await reply(id, "最早的回复")).json();
+    const second = await (await reply(id, `回复 @回复编者：这就跟进了`, other.session)).json();
+    // 扁平一层：所有回复都直接挂在评论下，没有可写入的嵌套结构
+    const rows = await read(termId);
+    const target = rows.find((row: { id: number }) => row.id === id);
+    expect(target.replies.filter((row: { id: number }) => [first.id, second.id].includes(row.id))
+      .map((row: { id: number }) => row.id)).toEqual([first.id, second.id]);
+    const times = target.replies.filter((row: { id: number }) => [first.id, second.id].includes(row.id))
+      .map((row: { createdAt: string }) => new Date(row.createdAt).getTime());
+    expect(times[0]).toBeLessThanOrEqual(times[1]);
+    expect(target.replies.find((row: { id: number }) => row.id === second.id))
+      .toMatchObject({ authorName: "回复编者", content: "回复 @回复编者：这就跟进了" });
+    expect(await removeReply(first.id, other.session)).toMatchObject({ status: 403 });
+    expect((await removeReply(first.id, "")).status).toBe(401);
+  } finally {
+    // 各作者只能自删（上面已断言 403）；清理直接按目标清行，再删评论与账号
+    await getDb().delete(replies).where(and(eq(replies.targetType, "page_comment"), eq(replies.targetId, id)));
+    await remove(id);
+    await other.cleanup();
+  }
+});
+
+it("有回复的评论被作者删除后保留占位：内容与作者不再外发、回复可读、不可再回复与赞同、退出搜索", async () => {
+  const marker = `placeholder${randomUUID().replaceAll("-", "")}`;
+  const { id } = await (await create(perspectiveId, marker)).json();
+  const commenter = await signUpRole("占位回复者", "editor");
+  try {
+    const { id: replyId } = await (await reply(id, "占位评论的回复", commenter.session)).json();
+    expect(await searchPublicPages(marker).then(r => r.hits)).toHaveLength(1);
+    expect((await remove(id)).status).toBe(204);
+    // 占位保留：评论行还在，但内容与作者信息被移除；回复原样可读
+    const rows = await read(perspectiveId);
+    const placeholder = rows.find((row: { id: number }) => row.id === id);
+    expect(placeholder).toMatchObject({ deleted: true, content: "", authorName: "", authorId: "" });
+    expect(placeholder.replies).toEqual([expect.objectContaining({ deleted: false, content: "占位评论的回复", authorName: "占位回复者" })]);
+    // 占位不可再回复、不可赞同；搜索索引同步移除
+    expect((await reply(id, "占位不能再被回复")).status).toBe(404);
+    expect((await agree(id, commenter.session)).status).toBe(404);
+    expect((await searchPublicPages(marker)).hits).toEqual([]);
+    // 版务留痕：软删评论与回复的数据行仍在；回复清零后占位不消失（占位语义在删除时定格）
+    const [stored] = await getDb().select({ deletedBy: pageComments.deletedBy }).from(pageComments).where(eq(pageComments.id, id));
+    expect(stored.deletedBy).toBe(authorId);
+    // 回复作者自删自己的回复（物理移除），占位评论不随之消失
+    expect((await removeReply(replyId, commenter.session)).status).toBe(204);
+    expect((await read(perspectiveId)).find((row: { id: number }) => row.id === id)).toMatchObject({ deleted: true, replies: [] });
+    await getDb().delete(replies).where(and(eq(replies.targetType, "page_comment"), eq(replies.targetId, id)));
+    await getDb().delete(pageComments).where(eq(pageComments.id, id));
+  } finally { await commenter.cleanup(); }
+});
+
+it("无回复的评论删除后直接移除，不产生占位行", async () => {
+  const { id } = await (await create(perspectiveId, "无回复直接消失")).json();
+  expect((await remove(id)).status).toBe(204);
+  expect((await read(perspectiveId)).find((row: { id: number }) => row.id === id)).toBeUndefined();
+  expect(await getDb().select().from(pageComments).where(eq(pageComments.id, id))).toEqual([]);
+});
+
+it("回复删除：作者自删物理移除，管理员处置他人回复软删占位留痕，重复删除幂等", async () => {
+  const { id } = await (await create(termId, "待处置回复的评论")).json();
+  const commenter = await signUpRole("被处置回复者", "editor");
+  const admin = await signUpRole("版务管理员", "admin");
+  try {
+    const mine = await (await reply(id, "作者自己删的回复")).json();
+    expect((await removeReply(mine.id)).status).toBe(204);
+    expect(await getDb().select().from(replies).where(eq(replies.id, mine.id))).toEqual([]);
+    const other = await (await reply(id, "版务处置的回复", commenter.session)).json();
+    expect((await removeReply(other.id, admin.session)).status).toBe(204);
+    const [stored] = await getDb().select().from(replies).where(eq(replies.id, other.id));
+    expect(stored).toMatchObject({ content: "版务处置的回复", deletedBy: admin.account.user.id });
+    expect(stored.deletedAt).not.toBeNull();
+    const listed = (await read(termId)).find((row: { id: number }) => row.id === id);
+    expect(listed.replies).toEqual([expect.objectContaining({ deleted: true, content: "", authorName: "" })]);
+    // 已删除的回复重复删除幂等成功
+    expect((await removeReply(other.id, admin.session)).status).toBe(204);
+  } finally {
+    await getDb().delete(replies).where(and(eq(replies.targetType, "page_comment"), eq(replies.targetId, id)));
+    await remove(id);
+    await commenter.cleanup();
+    await admin.cleanup();
   }
 });

@@ -129,7 +129,7 @@ export default async function TermPage({ params }: Params) {
           />
         </div>
       </div>
-      <PageComments pageId={page.id} href={`/term/${pageKey(page.slug, page.id)}`} title="词条总评论" userId={sessionUser?.id} />
+      <PageComments pageId={page.id} href={`/term/${pageKey(page.slug, page.id)}`} title="词条总评论" user={sessionUser} />
     </main>
   );
 }

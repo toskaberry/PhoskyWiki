@@ -574,15 +574,45 @@ export const termDiscussions = pgTable("term_discussions", {
 });
 
 /** 页面评论分别归属词条或视角；允许的页面类型由写入边界校验。 */
+// 软删字段（spec 0009）：仍有回复的评论被删除后保留「已删除」占位，回复继续可读；
+// 无回复的评论直接物理移除，不产生软删行。
 export const pageComments = pgTable("page_comments", {
   id: serial("id").primaryKey(),
   pageId: integer("page_id").notNull().references(() => pages.id, { onDelete: "cascade" }),
   authorId: text("author_id").notNull().references(() => user.id),
   content: text("content").notNull(),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  deletedBy: text("deleted_by").references(() => user.id),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, t => [
   index("page_comments_page_created_idx").on(t.pageId, t.createdAt, t.id),
   check("page_comments_content_length", sql`char_length(${t.content}) between 1 and 2000`),
+]);
+
+/**
+ * 回复目标类型：页面评论先行（本工单），划线感想随感想工单扩展同一机制；
+ * 多态目标不做外键，目标存在性与可回复性由应用层按目标类型校验。
+ */
+export const replyTargetEnum = pgEnum("reply_target", ["page_comment"] as const);
+
+/**
+ * 回复（spec 0009）：挂在页面评论（后续含划线感想）之下的扁平回应列表。
+ * @ 提及只是正文前缀文本，不单独建模；扁平不嵌套——目标只能是评论本身，
+ * 「回复的回复」没有可写入的结构。列表按发表时间升序，id 兜底保证同刻稳定。
+ */
+export const replies = pgTable("replies", {
+  id: serial("id").primaryKey(),
+  targetType: replyTargetEnum("target_type").notNull(),
+  targetId: integer("target_id").notNull(),
+  authorId: text("author_id").notNull().references(() => user.id),
+  content: text("content").notNull(),
+  // 回复的软删只用于版务留痕（管理员删除后渲染占位）；作者自删即物理移除
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  deletedBy: text("deleted_by").references(() => user.id),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, t => [
+  index("replies_target_created_idx").on(t.targetType, t.targetId, t.createdAt, t.id),
+  check("replies_content_length", sql`char_length(${t.content}) between 1 and 2000`),
 ]);
 
 /**

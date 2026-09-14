@@ -12,12 +12,15 @@ import { sql } from "drizzle-orm";
 import { getDb } from "@/db";
 import { seedExtendedContent } from "@/db/seed-extended";
 import {
+  agrees,
   categories,
   discussionPosts,
   interpreters,
   links,
+  pageComments,
   pages,
   perspectives,
+  replies,
   revisions,
   schoolMembers,
   schools,
@@ -343,7 +346,7 @@ export async function seedDatabase(): Promise<{
   }
   const db = getDb();
   await db.execute(
-    sql`truncate table ${termDiscussions}, ${discussionPosts}, ${submissionVotes}, ${submissions}, ${links}, ${revisions}, ${perspectives}, ${termCategories}, ${categories}, ${schoolMembers}, ${schools}, ${interpreters}, ${terms}, ${pages} restart identity cascade`,
+    sql`truncate table ${replies}, ${pageComments}, ${agrees}, ${termDiscussions}, ${discussionPosts}, ${submissionVotes}, ${submissions}, ${links}, ${revisions}, ${perspectives}, ${termCategories}, ${categories}, ${schoolMembers}, ${schools}, ${interpreters}, ${terms}, ${pages} restart identity cascade`,
   );
 
   // 词条：pages 壳 + 负载

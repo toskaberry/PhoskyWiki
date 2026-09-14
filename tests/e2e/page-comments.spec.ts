@@ -1,9 +1,9 @@
 import "dotenv/config";
 import { randomUUID } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { expect, test, type Page } from "./fixtures";
 import { getDb } from "../../src/db";
-import { pageComments, pages, user } from "../../src/db/schema";
+import { pageComments, pages, replies, user } from "../../src/db/schema";
 import { fixtureRegister } from "./auth-fixture";
 
 async function openTerm(page: Page) {
@@ -223,6 +223,142 @@ test("评论区按赞同数降序、同票按发表时间新→旧排列", async
       .getByText("1 赞同", { exact: true })).toBeVisible();
   } finally {
     for (const id of created.values()) await commenterContext.request.delete(`/api/comments/${id}`);
+    await commenterContext.close();
+  }
+});
+
+test("游客可读评论下的回复且无写入口，回复写接口返回 401", async ({ page }) => {
+  const pageId = await termPageId();
+  const [author] = await getDb().select().from(user).limit(1);
+  const [seeded] = await getDb().insert(pageComments)
+    .values({ pageId, authorId: author.id, content: `游客回复 seed ${Date.now()}` }).returning();
+  const [seededReply] = await getDb().insert(replies)
+    .values({ targetType: "page_comment", targetId: seeded.id, authorId: author.id, content: "游客可见的回复" }).returning();
+  try {
+    await openTerm(page);
+    const item = page.locator(`#comment-${seeded.id}`);
+    await expect(item.getByText("游客可见的回复", { exact: true })).toBeVisible();
+    await expect(item.getByRole("button")).toHaveCount(0);
+    expect((await page.request.post(`/api/comments/${seeded.id}/replies`, { data: { content: "游客回复" } })).status()).toBe(401);
+    expect((await page.request.delete(`/api/replies/${seededReply.id}`)).status()).toBe(401);
+  } finally {
+    await getDb().delete(replies).where(eq(replies.targetId, seeded.id));
+    await getDb().delete(pageComments).where(eq(pageComments.id, seeded.id));
+  }
+});
+
+test("登录后可回复评论：@ 前缀指明回应对象、回复按时间升序、移动端只读", async ({ page }) => {
+  test.skip(!process.env.SEED_ADMIN_PASSWORD, "需要种子管理员密码");
+  await login(page);
+  await openTerm(page);
+  const region = page.locator("#comments");
+  const comment = `回复流程评论 ${Date.now()}`;
+  await region.getByLabel("评论内容").fill(comment);
+  await region.getByRole("button", { name: "发表评论", exact: true }).click();
+  const item = region.getByRole("listitem").filter({ hasText: comment });
+  await expect(item).toBeVisible();
+  const commentId = Number((await item.getAttribute("id"))!.split("-")[1]);
+  try {
+    // 对评论本身回复：无前缀
+    await item.getByRole("button", { name: "回复", exact: true }).click();
+    await item.getByLabel("回复内容").fill("第一条回复");
+    await item.locator("form").getByRole("button", { name: "回复", exact: true }).click();
+    await expect(item.getByText("第一条回复", { exact: true })).toBeVisible();
+    // 点回复的「回复」：以前缀「回复 @昵称：」开框指明对象，仍是对评论的扁平回复
+    const replyItem = item.locator("ul li").filter({ hasText: "第一条回复" });
+    await replyItem.getByRole("button", { name: "回复", exact: true }).click();
+    const box = item.getByLabel("回复内容");
+    await expect(box).toHaveValue("回复 @管理员：");
+    await box.fill("回复 @管理员：跟进一步");
+    await item.locator("form").getByRole("button", { name: "回复", exact: true }).click();
+    await expect(item.getByText("回复 @管理员：跟进一步", { exact: true })).toBeVisible();
+    // 时间升序：第一条在前（router.refresh 与在途响应可能短暂交错，改为可重试断言）
+    await expect.poll(async () => {
+      const texts = await item.locator("ul li").allTextContents();
+      return texts.findIndex(text => text.includes("跟进一步")) - texts.findIndex(text => text.includes("第一条回复"));
+    }).toBeGreaterThan(0);
+    // 移动端只读：无回复入口
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(item.getByRole("button", { name: "回复", exact: true })).toHaveCount(0);
+    await page.setViewportSize({ width: 1280, height: 900 });
+  } finally {
+    await getDb().delete(replies).where(eq(replies.targetId, commentId));
+    await getDb().delete(pageComments).where(eq(pageComments.id, commentId));
+  }
+});
+
+test("有回复的评论被作者删除后保留占位、回复可读且不可再回复；无回复删除直接消失", async ({ page, browser }) => {
+  test.skip(!process.env.SEED_ADMIN_PASSWORD, "需要种子管理员密码");
+  const commenterContext = await browser.newContext();
+  const email = `placeholder-${randomUUID()}@example.com`;
+  expect((await fixtureRegister(commenterContext.request, {
+    data: { name: "占位流程编者", email, password: "reply-test-password" },
+  })).ok()).toBe(true);
+  const pageId = await termPageId();
+  const marker = Date.now();
+  const created = await commenterContext.request.post("/api/comments", { data: { pageId, content: `占位评论 ${marker}` } });
+  expect(created.status()).toBe(201);
+  const { id } = await created.json();
+  try {
+    await login(page);
+    await openTerm(page);
+    const region = page.locator("#comments");
+    const item = region.locator(`#comment-${id}`);
+    await item.getByRole("button", { name: "回复", exact: true }).click();
+    await item.getByLabel("回复内容").fill("占位流程的回复");
+    await item.locator("form").getByRole("button", { name: "回复", exact: true }).click();
+    await expect(item.getByText("占位流程的回复", { exact: true })).toBeVisible();
+    // 作者删除有回复的评论：占位显示、回复保留可读、回复入口全部撤下
+    expect((await commenterContext.request.delete(`/api/comments/${id}`)).ok()).toBe(true);
+    await page.reload();
+    await expect(item.getByText("该评论已删除。", { exact: true })).toBeVisible();
+    await expect(item.getByText(`占位评论 ${marker}`, { exact: true })).toHaveCount(0);
+    await expect(item.getByText("占位流程的回复", { exact: true })).toBeVisible();
+    await expect(item.getByRole("button", { name: "回复", exact: true })).toHaveCount(0);
+    // 回复作者（管理员）删除自己的回复：回复消失，占位仍在——占位评论下回复仍可删
+    await item.getByRole("button", { name: "删除回复", exact: true }).click();
+    await expect(item.getByText("该评论已删除。", { exact: true })).toBeVisible();
+    await expect(item.getByText("占位流程的回复")).toHaveCount(0);
+    await expect(item.getByRole("button", { name: "删除回复", exact: true })).toHaveCount(0);
+    // 无回复的评论删除后直接消失，不产生占位
+    const own = `无回复消失评论 ${marker}`;
+    await region.getByLabel("评论内容").fill(own);
+    await region.getByRole("button", { name: "发表评论", exact: true }).click();
+    const ownItem = region.getByRole("listitem").filter({ hasText: own });
+    await expect(ownItem).toBeVisible();
+    await ownItem.getByRole("button", { name: "删除评论", exact: true }).click();
+    await expect(ownItem).toHaveCount(0);
+  } finally {
+    await getDb().delete(replies).where(and(eq(replies.targetType, "page_comment"), eq(replies.targetId, id)));
+    await getDb().delete(pageComments).where(eq(pageComments.id, id));
+    await commenterContext.close();
+  }
+});
+
+test("管理员可删除他人回复并显示版务占位", async ({ page, browser }) => {
+  test.skip(!process.env.SEED_ADMIN_PASSWORD, "需要种子管理员密码");
+  const commenterContext = await browser.newContext();
+  const email = `moderate-${randomUUID()}@example.com`;
+  expect((await fixtureRegister(commenterContext.request, {
+    data: { name: "版务流程编者", email, password: "reply-test-password" },
+  })).ok()).toBe(true);
+  const pageId = await termPageId();
+  const created = await commenterContext.request.post("/api/comments", { data: { pageId, content: `版务回复评论 ${Date.now()}` } });
+  expect(created.status()).toBe(201);
+  const { id } = await created.json();
+  expect((await commenterContext.request.post(`/api/comments/${id}/replies`, { data: { content: "待版务处置的回复" } })).status()).toBe(201);
+  try {
+    await login(page);
+    await openTerm(page);
+    const item = page.locator("#comments").locator(`#comment-${id}`);
+    await expect(item.getByText("待版务处置的回复", { exact: true })).toBeVisible();
+    await item.getByRole("button", { name: "删除回复", exact: true }).click();
+    await expect(item.getByText("该回复已被版务删除。", { exact: true })).toBeVisible();
+    await expect(item.getByText("待版务处置的回复")).toHaveCount(0);
+    await expect(item.getByRole("button", { name: "删除回复", exact: true })).toHaveCount(0);
+  } finally {
+    await getDb().delete(replies).where(and(eq(replies.targetType, "page_comment"), eq(replies.targetId, id)));
+    await getDb().delete(pageComments).where(eq(pageComments.id, id));
     await commenterContext.close();
   }
 });

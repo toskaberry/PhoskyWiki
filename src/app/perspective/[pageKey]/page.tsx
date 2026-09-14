@@ -146,7 +146,7 @@ export default async function PerspectivePage({ params }: Params) {
           </p>
         </div>
       </div>
-      <PageComments pageId={page.id} href={pagePath("perspective", page.slug, page.id)} title="视角评论" userId={sessionUser?.id} />
+      <PageComments pageId={page.id} href={pagePath("perspective", page.slug, page.id)} title="视角评论" user={sessionUser} />
     </main>
   );
 }
