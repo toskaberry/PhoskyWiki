@@ -150,3 +150,50 @@
   @apply cursor-help text-muted-foreground no-underline;
   border-bottom: 1px dotted currentColor;
 }
+
+/* 个人标记三样式（spec 0009 #72，components/passage-marks.tsx 动态包裹）。
+   高光为马克笔式半透明底色；实线/波浪线用 text-decoration，与行内链接样式互不干扰。 */
+.wiki-content .pw-mark--highlight {
+  background: oklch(0.9 0.16 98 / 0.55);
+  border-radius: 0.125rem;
+}
+.wiki-content .pw-mark--underline {
+  text-decoration-line: underline;
+  text-decoration-color: oklch(0.72 0.16 70);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+}
+.wiki-content .pw-mark--squiggle {
+  text-decoration-line: underline wavy;
+  text-decoration-color: oklch(0.72 0.16 70);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 4px;
+}
+.dark .wiki-content .pw-mark--highlight {
+  background: oklch(0.75 0.14 90 / 0.3);
+}
+
+/* 选区浮条（微信读书式）：默认样式按钮描边强调，指向尖角贴选区一侧。 */
+.pw-style-button[data-default] {
+  outline: 1px solid var(--ring);
+  outline-offset: -1px;
+}
+.pw-selection-toolbar {
+  position: fixed;
+}
+.pw-selection-toolbar-caret {
+  position: absolute;
+  left: 50%;
+  bottom: -4px;
+  width: 8px;
+  height: 8px;
+  transform: translateX(-50%) rotate(45deg);
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  background: var(--popover);
+}
+.pw-selection-toolbar-caret--below {
+  bottom: auto;
+  top: -4px;
+  transform: translateX(-50%) rotate(225deg);
+}
