@@ -110,5 +110,5 @@ it("运维预览不改变公开页面；归并保留正文历史、清理来源�
     expect.objectContaining({ source: Math.min(kept, renamedTarget), target: Math.max(kept, renamedTarget) }),
     expect.objectContaining({ source: Math.min(kept, reusedNameTarget), target: Math.max(kept, reusedNameTarget) }),
   ]));
-  expect(await run(true)).toMatchObject({ groups: [], removedPages: 0, removedPosts: 0, removedRevisions: 0, removedSubmissions: 0 });
+  expect(await run(true)).toMatchObject({ groups: [], removedPages: 0, removedRevisions: 0, removedSubmissions: 0 });
 }, 60_000);

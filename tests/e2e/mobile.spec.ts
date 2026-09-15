@@ -15,7 +15,7 @@ async function expectFits(page: Page) {
   }
 }
 
-test("375px：搜索提交、词条阅读、图谱定位与讨论发言可用", async ({ page }) => {
+test("375px：搜索提交、词条阅读、图谱定位与评论区发言可用", async ({ page }) => {
   await page.goto("/");
   await expectFits(page);
   const search = page.getByRole("main").getByRole("textbox", { name: "全站搜索" });
@@ -30,10 +30,11 @@ test("375px：搜索提交、词条阅读、图谱定位与讨论发言可用", 
   await expectFits(page);
   await page.getByRole("button", { name: /展开全部/ }).tap();
   await expect(page.getByRole("link", { name: "德勒兹论主体性", exact: true })).toBeVisible();
-  await page.getByRole("link", { name: /讨论区（\d+ 楼）→/ }).tap();
-  await expect(page.getByText("登录后即可发言")).toBeVisible();
+  // 讨论区退役后词条页自带总评论区：移动端一期只读（写入口留给桌面端）
+  await expect(page.getByRole("heading", { level: 2, name: "词条总评论" })).toBeVisible();
+  await expect(page.getByText("移动端仅供阅读，请在桌面端发表评论。")).toBeVisible();
   await expectFits(page);
-  const discussionUrl = page.url();
+  const termUrl = page.url();
 
   await page.goto("/graph");
   await expect(page.getByTestId("graph-canvas")).toBeVisible();
@@ -50,10 +51,9 @@ test("375px：搜索提交、词条阅读、图谱定位与讨论发言可用", 
   await page.getByLabel("密码（至少 8 位）").fill("password123");
   await page.getByRole("button", { name: "注册并登录" }).tap();
   await expect(page.getByTestId("session-user")).toContainText("移动端编者");
-  await page.goto(discussionUrl);
-  const message = `375px 发言 ${randomUUID()} ${"longword".repeat(20)}`;
-  await page.getByLabel("发言内容").fill(message);
-  await page.getByRole("button", { name: "发言", exact: true }).tap();
-  await expect(page.getByText(message, { exact: true })).toBeVisible();
+  // 登录用户同样只读：评论区保持可读，写入口仍是桌面端专属
+  await page.goto(termUrl);
+  await expect(page.getByRole("heading", { level: 2, name: "词条总评论" })).toBeVisible();
+  await expect(page.getByText("移动端仅供阅读，请在桌面端发表评论。")).toBeVisible();
   await expectFits(page);
 });

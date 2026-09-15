@@ -19,7 +19,7 @@ import {
   listPerspectivesOfTerm,
 } from "@/lib/content";
 import { categoryPath } from "@/lib/categories";
-import { countDiscussionPosts } from "@/lib/discussion";
+
 import { getLocalGraph } from "@/lib/graph";
 import { getInterestTags } from "@/lib/interests";
 import { getTermDiscovery } from "@/lib/term-discovery";
@@ -43,14 +43,13 @@ export default async function TermPage({ params }: Params) {
   const term = await getTermDetail(page.id);
   if (!term) notFound();
 
-  const [perspectives, categories, backlinks, sessionUser, localGraph, discussionCount] =
+  const [perspectives, categories, backlinks, sessionUser, localGraph] =
     await Promise.all([
       listPerspectivesOfTerm(page.id),
       listCategoriesOfTerm(page.id),
       listBacklinks(page.id),
       getSessionUser(),
       getLocalGraph(page.id, 1),
-      countDiscussionPosts(page.id),
     ]);
 
   const interests = sessionUser ? await getInterestTags(sessionUser.id) : null;
@@ -79,15 +78,6 @@ export default async function TermPage({ params }: Params) {
           <p className="mt-3 text-lg leading-relaxed text-muted-foreground">
             {term.summary}
           </p>
-          <p className="mt-2 text-sm">
-            <Link
-              href={`/term/${pageKey(page.slug, page.id)}/discussion`}
-              className="text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
-            >
-              讨论区（{discussionCount} 楼）→
-            </Link>
-          </p>
-
           <TermDiscoveryPanel
             termId={page.id}
             initial={discovery}

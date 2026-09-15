@@ -1,4 +1,5 @@
 import { auth } from "@/lib/auth";
+import { afterMutation } from "@/lib/redirect-after-mutation";
 import { writeLimitResponse } from "@/lib/write-limits";
 import { commentId, commentResponse, deletePageComment } from "@/lib/page-comments";
 
@@ -9,6 +10,6 @@ export async function DELETE(req: Request, ctx: { params: Promise<{ commentId: s
   if (limited) return limited;
   return commentResponse(async () => {
     await deletePageComment(commentId((await ctx.params).commentId), session.user.id);
-    return new Response(null, { status: 204 });
+    return afterMutation(req);
   });
 }

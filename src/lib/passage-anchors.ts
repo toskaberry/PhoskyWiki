@@ -127,7 +127,10 @@ export function splitSentences(text: string): PassageSentence[] {
   function append(end: number) {
     const chunk = text.slice(cursor, end);
     const trimmed = chunk.trim();
-    if (trimmed) {
+    // 只有空白的分片不是句子：规范化文本把「软换行 + 缩进」压成一个空格，
+    // 该空格会自成一段分片，若当成句子就会产出没有可标记文本的句子区间，
+    // 句子虚线渲染与句子聚合都会被它带偏。
+    if (trimmed && /\S/u.test(trimmed)) {
       const start = cursor + chunk.indexOf(trimmed);
       sentences.push({ start, end: start + trimmed.length, text: trimmed });
     }

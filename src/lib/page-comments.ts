@@ -4,7 +4,7 @@ import { getDb, type Db } from "@/db";
 import { agrees, pageComments, pages, perspectives, replies, user } from "@/db/schema";
 import { hasAdminRole } from "@/lib/roles";
 import { isPageVisible } from "@/lib/page-visibility";
-import { termLockedAt } from "@/lib/discussion";
+import { termLockedAt } from "@/lib/term-lock";
 import { queueCommentSync, transactionWithSearchSync } from "@/lib/search/search-sync";
 
 type Reader = Pick<Db, "select">;

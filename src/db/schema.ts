@@ -592,13 +592,13 @@ export const pageComments = pgTable("page_comments", {
 ]);
 
 /**
- * 回复目标类型：页面评论先行（本工单），划线感想随感想工单扩展同一机制；
+ * 回复目标类型：页面评论与划线感想共用一个多态目标；
  * 多态目标不做外键，目标存在性与可回复性由应用层按目标类型校验。
  */
-export const replyTargetEnum = pgEnum("reply_target", ["page_comment"] as const);
+export const replyTargetEnum = pgEnum("reply_target", ["page_comment", "passage_thought"] as const);
 
 /**
- * 回复（spec 0009）：挂在页面评论（后续含划线感想）之下的扁平回应列表。
+ * 回复（spec 0009）：挂在页面评论或划线感想之下的扁平回应列表。
  * @ 提及只是正文前缀文本，不单独建模；扁平不嵌套——目标只能是评论本身，
  * 「回复的回复」没有可写入的结构。列表按发表时间升序，id 兜底保证同刻稳定。
  */
@@ -676,11 +676,60 @@ export const userMarkStyle = pgTable("user_mark_style", {
 });
 
 /**
- * 赞同目标类型：页面评论先行（本工单），划线感想随后续工单扩展同一机制；
- * 多态目标不做外键，目标存在性与可赞同性由应用层按目标类型校验。
+ * 赞同目标类型：页面评论与公开划线感想共用同一多态机制（回复不设赞同）；
+ * 目标存在性与可赞同性由应用层按目标类型校验。
  */
-export const agreeTargetEnum = pgEnum("agree_target", ["page_comment"] as const);
+export const agreeTargetEnum = pgEnum("agree_target", ["page_comment", "passage_thought"] as const);
 
+// ---------------------------------------------------------------------------
+// 划线感想（spec 0009 #73/#74）：读者在视角正文的选文上留下的感想，与个人标记
+// 同源锚定（quote + 偏移 + base_revision_id，见 docs/passage-anchors.md 与 ADR-0008），
+// 但归属讨论：公开感想进入句子面板（按赞同排序），仅自己可见的感想只对作者渲染。
+// ---------------------------------------------------------------------------
+
+/** 感想可见性：公开（进入句子面板与公共虚线）或仅自己可见（个人红虚线）。 */
+export const thoughtVisibilityEnum = pgEnum("thought_visibility", ["public", "private"] as const);
+
+export type ThoughtVisibility = (typeof thoughtVisibilityEnum.enumValues)[number];
+
+/**
+ * 一行 = 一条划线感想。锚定字段与 personal_marks 同语义，但感想保留「发表时的
+ * 原文引用与基准修订」不随正文修订重锚：定位失败即判「原文已变更」，讨论保留
+ * 并展示原引用（ADR-0008），不做模糊匹配、不删除讨论。
+ * 软删字段与页面评论同语义：仍有回复时留占位（内容与作者不外发），无回复直接移除。
+ */
+export const passageThoughts = pgTable(
+  "passage_thoughts",
+  {
+    id: serial("id").primaryKey(),
+    // 感想只属于视角页正文（与个人标记同一写入边界）
+    pageId: integer("page_id")
+      .notNull()
+      .references(() => pages.id, { onDelete: "cascade" }),
+    authorId: text("author_id")
+      .notNull()
+      .references(() => user.id),
+    content: text("content").notNull(),
+    visibility: thoughtVisibilityEnum("visibility").notNull().default("public"),
+    // 发表时的选区引用快照（规范化正文上的 UTF-16 半开区间）
+    anchorStart: integer("anchor_start").notNull(),
+    anchorEnd: integer("anchor_end").notNull(),
+    quote: text("quote").notNull(),
+    baseRevisionId: integer("base_revision_id")
+      .notNull()
+      .references(() => revisions.id),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+    deletedBy: text("deleted_by").references(() => user.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("passage_thoughts_page_idx").on(t.pageId, t.id),
+    index("passage_thoughts_author_idx").on(t.authorId),
+    check("passage_thoughts_content_length", sql`char_length(${t.content}) between 1 and 2000`),
+    check("passage_thoughts_anchor_range", sql`${t.anchorStart} >= 0 and ${t.anchorEnd} > ${t.anchorStart}`),
+    check("passage_thoughts_quote_length", sql`char_length(${t.quote}) between 1 and 10000`),
+  ],
+);
 /**
  * 赞同：一行 = 一个用户对一个目标的认可，撤销即删行（spec 0009 Q23/Q27）。
  * (用户, 目标) 复合主键保证唯一、重复请求不重复计数；回复不设赞同（没有对应目标类型）。

@@ -9,6 +9,14 @@ import { user } from "../../src/db/schema";
 
 const content = "第一句包含部分引用。第二句继续讨论。\n\n第三句跨越段落。";
 
+/** 句子虚线（一句可能被内层个人标记切成多段）：按句起点定位，一段即一句。 */
+const sentenceMarker = (scope: Page, sentenceStart: number) =>
+  scope.locator(`.pw-thought-marker[data-sentence-start="${sentenceStart}"]`);
+
+/** 该句上是否有「我的想法」红虚线（同样是多段，取第一段即可）。 */
+const ownSentenceMarker = (scope: Page, sentenceStart: number) =>
+  sentenceMarker(scope, sentenceStart).filter({ hasNot: scope.locator(".pw-thought-marker") });
+
 async function submit(request: APIRequestContext, data: Record<string, unknown>) {
   const response = await request.post("/api/submissions", { data });
   expect(response.status()).toBe(201);
@@ -29,53 +37,92 @@ async function setup(page: Page) {
   return { ...perspective, revision, titles };
 }
 
+/**
+ * 选中正文里的一段文字：在「规范化正文」上定位 —— 块级元素之间按 \n 连接，
+ * 与 lib/passage-anchors 的 indexPassage 投影一致（innerText 在段落间是空行，对不上锚点）。
+ */
 async function selectText(page: Page, quote: string) {
+  await page.locator(".wiki-content").waitFor({ state: "visible" });
+  await expect.poll(() => page.evaluate(() => {
+    const root = document.querySelector(".wiki-content");
+    if (!root) return "";
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    let text = "";
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      if (text && !text.endsWith("\n") && (node.parentElement?.matches("p, h1, h2, h3, li, blockquote, pre") ?? false)) {
+        text += "\n";
+      }
+      text += node.nodeValue ?? "";
+    }
+    return text;
+  })).toContain(quote);
   expect(await page.evaluate(quote => {
     const root = document.querySelector(".wiki-content");
     if (!root) return false;
+    const block = "p, h1, h2, h3, h4, h5, h6, li, blockquote, pre";
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-    const texts: Text[] = [];
-    for (let node = walker.nextNode(); node; node = walker.nextNode()) texts.push(node as Text);
-    const start = texts.map(text => text.data).join("").indexOf(quote);
-    if (start < 0) return false;
-    let cursor = 0;
-    const range = document.createRange();
-    let started = false;
-    for (const text of texts) {
-      if (!started && start <= cursor + text.length) { range.setStart(text, start - cursor); started = true; }
-      if (started && start + quote.length <= cursor + text.length) {
-        range.setEnd(text, start + quote.length - cursor);
-        document.getSelection()?.removeAllRanges();
-        document.getSelection()?.addRange(range);
-        return true;
-      }
-      cursor += text.length;
+    // 规范化正文的片段清单：每个文本节点一段，块级起点前补 \n（与 indexPassage 同规则）
+    const parts: { node: Text; start: number; end: number }[] = [];
+    let text = "";
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      const textNode = node as Text;
+      if (text && !text.endsWith("\n") && (textNode.parentElement?.matches(block) ?? false)) text += "\n";
+      parts.push({ node: textNode, start: text.length, end: text.length + textNode.data.length });
+      text += textNode.data;
     }
-    return false;
+    const start = text.indexOf(quote);
+    if (start < 0) return false;
+    const end = start + quote.length;
+    const pointAt = (position: number, wantEnd: boolean) => {
+      for (const part of parts) {
+        if (wantEnd ? position > part.start && position <= part.end : position >= part.start && position < part.end) {
+          return { node: part.node, offset: position - part.start };
+        }
+      }
+      const last = parts[parts.length - 1];
+      return last ? { node: last.node, offset: wantEnd ? last.node.data.length : 0 } : null;
+    };
+    const from = pointAt(start, false);
+    const to = pointAt(end, true);
+    if (!from || !to) return false;
+    const range = document.createRange();
+    range.setStart(from.node, from.offset);
+    range.setEnd(to.node, to.offset);
+    document.getSelection()?.removeAllRanges();
+    document.getSelection()?.addRange(range);
+    return true;
   }, quote)).toBe(true);
 }
 
 async function writeThought(page: Page, quote: string, text: string, visibility = "public") {
   await selectText(page, quote);
-  await page.getByRole("button", { name: "写想法", exact: true }).click();
-  await page.getByLabel("想法内容", { exact: true }).fill(text);
-  await page.getByLabel("想法可见性").selectOption(visibility);
+  // 选完等浮条挂载：选区评估按帧合并，浮条出现前点击会落空
+  const write = page.getByRole("button", { name: "写想法", exact: true });
+  await write.waitFor({ state: "visible" });
+  await write.click();
+  await page.locator("#thought-draft").fill(text);
+  await page.locator("#thought-visibility").selectOption(visibility);
   await page.getByRole("button", { name: "发布想法", exact: true }).click();
-  await expect(page.getByLabel("想法内容", { exact: true })).toHaveCount(0);
+  await expect(page.locator("#thought-draft")).toHaveCount(0);
 }
 
 test("句子聚合局部、跨句跨段引用，私密想法仅本人可见，公开想法支持赞同与平铺回复", async ({ page, browser }) => {
   test.skip(!process.env.SEED_ADMIN_PASSWORD, "需要种子管理员密码");
   test.setTimeout(90_000);
+  page.setDefaultTimeout(10_000);
   const source = await setup(page);
   const readerContext = await browser.newContext();
   const email = `thought-${randomUUID()}@example.com`;
   try {
     await page.goto(source.href);
     await writeThought(page, "部分引用", "局部公开想法");
-    await writeThought(page, "第二句继续讨论。第三句跨越", "跨句跨段想法", "private");
-    await expect(page.locator(".pw-thought-marker[data-own=true]")).toHaveCount(3);
-    await page.locator(".pw-thought-marker").first().click();
+    // 规范化正文里段落边界是一个 \n（不是源 Markdown 的空行），跨段引用按此书写
+    await writeThought(page, "第二句继续讨论。\n第三句跨越", "跨句跨段想法", "private");
+    // 三段虚线：句一（局部公开想法）、句二与句三（跨句跨段想法），全部是自己的红虚线
+    for (const start of [0, 10, 19]) {
+      await expect(ownSentenceMarker(page, start).first()).toHaveAttribute("data-own", "true");
+    }
+    await sentenceMarker(page, 0).first().click();
     const panel = page.getByRole("dialog", { name: "句子想法" });
     await expect(panel).toContainText("局部公开想法");
     await expect(panel.getByRole("button", { name: /^赞同/ })).toHaveCount(0);
@@ -86,6 +133,7 @@ test("句子聚合局部、跨句跨段引用，私密想法仅本人可见，�
     expect((await fixtureRegister(readerContext.request, { data: { name: "想法读者", email, password: "thought-reader-password" } })).ok()).toBe(true);
     const reader = await readerContext.newPage();
     await reader.goto(source.href);
+    // 游客/他人只见公开感想：句二、句三的想法是私密的，读者只看到句一的灰虚线
     await expect(reader.locator(".pw-thought-marker")).toHaveCount(1);
     await expect(reader.locator(".pw-thought-marker")).toHaveAttribute("data-own", "false");
     await expect(reader.locator(".pw-mark")).toHaveCount(0);
@@ -99,13 +147,19 @@ test("句子聚合局部、跨句跨段引用，私密想法仅本人可见，�
     await readPanel.getByRole("button", { name: "发送回复" }).click();
     await expect(readPanel).toContainText("第一条回复");
     await readPanel.getByRole("button", { name: "删除回复" }).click();
-    await expect(readPanel).toContainText("该回复已删除");
+    // 作者自删自己的回复即物理移除（占位语义只用于版务处置他人回复，见集成测试）
+    await expect(readPanel).not.toContainText("第一条回复");
 
-    await page.locator(".pw-thought-marker").nth(1).click();
-    await page.getByRole("button", { name: "设为公开" }).click();
+    // 作者把自己的私密感想在句二上转公开
+    await sentenceMarker(page, 10).first().click();
+    const ownPanel = page.getByRole("dialog", { name: "句子想法" });
+    await expect(ownPanel).toContainText("跨句跨段想法");
+    await ownPanel.getByRole("button", { name: "设为公开" }).click();
+    await expect(ownPanel.getByRole("button", { name: "设为仅自己可见" })).toBeVisible();
+    // 转公开后读者能看到句二、句三的灰虚线，并能读到内容
     await reader.reload();
     await expect(reader.locator(".pw-thought-marker")).toHaveCount(3);
-    await reader.locator(".pw-thought-marker").nth(2).click();
+    await sentenceMarker(reader, 19).first().click();
     await expect(reader.getByRole("dialog", { name: "句子想法" })).toContainText("跨句跨段想法");
     await reader.setViewportSize({ width: 390, height: 844 });
     await expect(reader.getByRole("button", { name: /回复想法|发送回复|赞同|删除回复/ })).toHaveCount(0);
@@ -130,17 +184,18 @@ test("失败保留想法草稿，旧修订明确确认后提交，失定位想�
     await bar.focus();
     await bar.getByRole("button", { name: "写想法" }).focus();
     await page.keyboard.press("Enter");
-    await page.getByLabel("想法内容", { exact: true }).fill("不要丢掉这份草稿");
+    await page.locator("#thought-draft").fill("不要丢掉这份草稿");
     await page.route("**/api/thoughts", route => route.abort(), { times: 1 });
     await page.getByRole("button", { name: "发布想法", exact: true }).click();
-    await expect(page.getByRole("alert")).toContainText("重试");
-    await expect(page.getByLabel("想法内容", { exact: true })).toHaveValue("不要丢掉这份草稿");
+    // Next 的 route announcer 也带 role=alert，断言限定在想法表单内
+    await expect(page.getByRole("dialog", { name: "写想法" }).getByRole("alert")).toContainText("重试");
+    await expect(page.locator("#thought-draft")).toHaveValue("不要丢掉这份草稿");
     await submit(page.request, { kind: "edit", pageId: source.pageId, content: "完全替换后的正文。", baseRevisionId: source.revision });
     await page.getByRole("button", { name: "发布想法", exact: true }).click();
     await expect(page.getByRole("button", { name: "确认以原选文发布" })).toBeVisible();
-    await expect(page.getByLabel("想法内容", { exact: true })).toHaveValue("不要丢掉这份草稿");
+    await expect(page.locator("#thought-draft")).toHaveValue("不要丢掉这份草稿");
     await page.getByRole("button", { name: "确认以原选文发布" }).click();
-    await expect(page.getByLabel("想法内容", { exact: true })).toHaveCount(0);
+    await expect(page.locator("#thought-draft")).toHaveCount(0);
     await expect(page.getByRole("button", { name: /查看原文已变化的想法/ })).toBeVisible();
     await page.getByRole("button", { name: /查看原文已变化的想法/ }).click();
     const panel = page.getByRole("dialog", { name: "句子想法" });

@@ -151,7 +151,7 @@
   border-bottom: 1px dotted currentColor;
 }
 
-/* 个人标记三样式（spec 0009 #72，components/passage-marks.tsx 动态包裹）。
+/* 个人标记三样式（spec 0009 #72，components/passage-annotations.tsx 动态包裹）。
    高光为马克笔式半透明底色；实线/波浪线用 text-decoration，与行内链接样式互不干扰。 */
 .wiki-content .pw-mark--highlight {
   background: oklch(0.9 0.16 98 / 0.55);
@@ -171,6 +171,22 @@
 }
 .dark .wiki-content .pw-mark--highlight {
   background: oklch(0.75 0.14 90 / 0.3);
+}
+
+/* 感想句子虚线（spec 0009 #73/#74）：公开感想统一灰虚线、本人感想红色虚线；
+   与个人标记叠加时虚线垫底（渲染顺序），两者都显示。可点击打开该句想法面板。 */
+.wiki-content .pw-thought-marker {
+  cursor: pointer;
+  border-bottom: 1px dashed oklch(0.62 0.02 260);
+}
+.wiki-content .pw-thought-marker[data-own="true"] {
+  border-bottom-color: oklch(0.58 0.2 25);
+}
+.dark .wiki-content .pw-thought-marker {
+  border-bottom-color: oklch(0.72 0.02 260);
+}
+.dark .wiki-content .pw-thought-marker[data-own="true"] {
+  border-bottom-color: oklch(0.7 0.18 25);
 }
 
 /* 选区浮条（微信读书式）：默认样式按钮描边强调，指向尖角贴选区一侧。 */

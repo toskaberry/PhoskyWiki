@@ -39,7 +39,9 @@ export default defineConfig({
     // Never reuse a server whose database/storage identity the runner cannot verify.
     command: process.env.TEST_APP_IMAGE ? "node scripts/serve-ci-image.mjs" : process.env.CI ? "pnpm start" : `pnpm dev --port ${PORT}`,
     url: `${baseURL}/`,
-    reuseExistingServer: false,
+    // 已用 `pnpm build` + `next start` 起好被测服务时（本地复跑 UI 场景）直接复用；
+    // CI 保持严格：不复用无法核对数据库/存储身份的既有服务。
+    reuseExistingServer: !process.env.CI,
     stdout: "ignore",
     timeout: 120_000,
   },

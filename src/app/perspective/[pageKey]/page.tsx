@@ -2,7 +2,7 @@ import Link from "next/link";
 import { PageComments } from "@/components/page-comments";
 import { AgentPanel } from "@/components/agent-panel";
 import { HistoryLink } from "@/components/history-link";
-import { PassageMarks } from "@/components/passage-marks";
+import { PassageAnnotations } from "@/components/passage-annotations";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 
@@ -18,6 +18,7 @@ import {
 import { formatYears } from "@/lib/format";
 import { renderMarkdown, wikiLinkResolver } from "@/lib/markdown";
 import { listPersonalMarks } from "@/lib/passage-marks";
+import { listPageThoughts } from "@/lib/passage-thoughts";
 import { pageIdFromKey, pageKey, pagePath } from "@/lib/slug";
 import { resolveLivePage } from "@/lib/resolve-page";
 import { getSessionUser } from "@/lib/session";
@@ -53,8 +54,12 @@ export default async function PerspectivePage({ params }: Params) {
   ]);
   const html = renderMarkdown(content, wikiLinkResolver(targets));
   // 个人标记（划线）随账号云端保存；游客无标记状态但仍可拉起浮条（复制/引导登录），
-  // 选区序列化需要正文 head 修订号
-  const marks = sessionUser ? await listPersonalMarks(page.id, sessionUser.id) : null;
+  // 选区序列化需要正文 head 修订号。划线感想与标记同页同源：公开感想随页面对所有读者
+  // 渲染句子虚线，本人私密感想只随本人登录返回（spec 0009 #74）。
+  const [marks, thoughtState] = await Promise.all([
+    sessionUser ? listPersonalMarks(page.id, sessionUser.id) : null,
+    listPageThoughts(page.id, sessionUser?.id),
+  ]);
   const revisionId = marks?.revisionId ?? (await getHeadRevisionId(page.id));
 
   const termHref = pagePath("term", detail.termSlug, detail.termId);
@@ -105,27 +110,29 @@ export default async function PerspectivePage({ params }: Params) {
             </p>
 
             <div className="mt-8">
-              <PassageMarks
+              <PassageAnnotations
                 html={html}
                 pageId={page.id}
                 revisionId={revisionId}
                 initialMarks={marks?.marks ?? []}
                 initialDefaultStyle={marks?.defaultStyle ?? "highlight"}
+                initialThoughts={thoughtState.thoughts}
                 loggedIn={sessionUser !== null}
+                viewerId={sessionUser?.id ?? null}
                 loginHref={`/login?redirect=${encodeURIComponent(pagePath("perspective", page.slug, page.id))}`}
               />
             </div>
           </article>
 
           <p className="mt-6 rounded-lg border border-border bg-card px-4 py-3 text-sm">
-            <Link
-              href={`/term/${pageKey(detail.termSlug, detail.termId)}/discussion?perspective=${detail.id}`}
+            <a
+              href="#comments"
               className="text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
             >
-              就这个视角发起讨论 →
-            </Link>
+              就这个视角发表评论 →
+            </a>
             <span className="ml-2 text-xs text-muted-foreground">
-              （在「{detail.termTitle}」的讨论区带视角锚点开楼）
+              （也可在正文里选中文字写想法，与「{detail.termTitle}」的其他读者讨论）
             </span>
           </p>
 

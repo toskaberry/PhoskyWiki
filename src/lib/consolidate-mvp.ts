@@ -2,7 +2,7 @@ import "server-only";
 
 import { and, asc, eq, inArray, isNotNull, or, sql } from "drizzle-orm";
 import { getDb, type Db } from "@/db";
-import { discussionPosts, links, pages, perspectives, revisions, submissions, termCategories, termDiscussions, terms } from "@/db/schema";
+import { links, pages, perspectives, revisions, submissions, termCategories, termDiscussions, terms } from "@/db/schema";
 import { applyContentChange, applyTermMetadataChange } from "@/lib/review";
 import { isPageVisible } from "@/lib/page-visibility";
 import { prepareConsolidationLinks, preserveConsolidatedTargets } from "@/lib/consolidation-links";
@@ -46,10 +46,9 @@ async function plan(tx: Tx, groups: MergeGroup[]) {
     for (const perspective of merge.perspectives) obsoleteIds.push(...perspective.items.slice(1).map(p => p.pageId));
   }
   const removeIds = [...new Set([...hiddenIds, ...obsoleteIds])];
-  const removedPosts = await tx.select({ id: discussionPosts.id }).from(discussionPosts).where(or(isNotNull(discussionPosts.deletedAt), removeIds.length ? inArray(discussionPosts.termId, hiddenIds) : undefined));
   const removedRevisions = removeIds.length ? await tx.select({ id: revisions.id }).from(revisions).where(inArray(revisions.pageId, removeIds)) : [];
   const removedSubmissions = removeIds.length ? await tx.select({ id: submissions.id }).from(submissions).where(or(inArray(submissions.pageId, removeIds), inArray(submissions.termId, removeIds), inArray(submissions.interpreterId, removeIds))) : [];
-  return { merges, hiddenIds, obsoleteIds, removeIds, removedPosts: removedPosts.map(p => p.id), removedRevisions: removedRevisions.map(r => r.id), removedSubmissions: removedSubmissions.map(s => s.id) };
+  return { merges, hiddenIds, obsoleteIds, removeIds, removedRevisions: removedRevisions.map(r => r.id), removedSubmissions: removedSubmissions.map(s => s.id) };
 }
 
 async function purge(tx: Tx, ids: number[]) {
@@ -73,9 +72,9 @@ async function purge(tx: Tx, ids: number[]) {
 export async function consolidateMvp(apply = false, groups = mvpMergeGroups) {
   const report = await getDb().transaction(async tx => {
     await tx.execute(sql`set local lock_timeout = '5s'`);
-    if (apply) await tx.execute(sql`lock table pages, terms, interpreters, perspectives, revisions, submissions, submission_votes, links, discussion_posts, term_discussions, term_categories in share row exclusive mode`);
+    if (apply) await tx.execute(sql`lock table pages, terms, interpreters, perspectives, revisions, submissions, submission_votes, links, term_discussions, term_categories in share row exclusive mode`);
     const planned = await plan(tx, groups);
-    const report = { applied: apply, groups: planned.merges.map(g => ({ title: g.title, keepId: g.keepId, sourceIds: g.roots.map(p => p.id), perspectiveCount: g.perspectives.length })), hiddenPages: planned.hiddenIds.length, obsoletePages: planned.obsoleteIds.length, removedPages: planned.removeIds.length, removedPosts: planned.removedPosts.length, removedRevisions: planned.removedRevisions.length, removedSubmissions: planned.removedSubmissions.length };
+    const report = { applied: apply, groups: planned.merges.map(g => ({ title: g.title, keepId: g.keepId, sourceIds: g.roots.map(p => p.id), perspectiveCount: g.perspectives.length })), hiddenPages: planned.hiddenIds.length, obsoletePages: planned.obsoleteIds.length, removedPages: planned.removeIds.length, removedRevisions: planned.removedRevisions.length, removedSubmissions: planned.removedSubmissions.length };
     if (!apply) return report;
     const names = new Map<string, string>();
     const ids = new Map<number, number>();
@@ -97,11 +96,6 @@ export async function consolidateMvp(apply = false, groups = mvpMergeGroups) {
     const combinedSources = new Set(planned.merges.flatMap(group => group.perspectives.filter(p => p.items.length > 1).flatMap(p => p.items.map(item => item.pageId))));
     const prepared = await prepareConsolidationLinks(tx, ids, titles, names, new Set(planned.removeIds), combinedSources);
     const combined = new Set<number>();
-    if (planned.removedPosts.length) {
-      // 被删楼层下的公开回复提升为楼层，保留文字；不复活被删除正文。
-      await tx.update(discussionPosts).set({ parentId: null }).where(inArray(discussionPosts.parentId, planned.removedPosts));
-      await tx.delete(discussionPosts).where(inArray(discussionPosts.id, planned.removedPosts));
-    }
     await purge(tx, planned.hiddenIds);
     for (const group of planned.merges) {
       const payloads = await tx.select().from(terms).where(inArray(terms.pageId, group.roots.map(p => p.id)));
@@ -115,7 +109,6 @@ export async function consolidateMvp(apply = false, groups = mvpMergeGroups) {
           if (!source) throw new Error(`视角 ${item.pageId} 缺少正文修订，未执行归并`);
           for (const [name, id] of source.targets) targets.set(name, id);
           content += `${content ? "\n\n" : ""}## ${group.roots.find(r => r.id === item.termId)!.title}\n\n${source.content}`;
-          await tx.update(discussionPosts).set({ perspectiveId: perspective.keepId }).where(eq(discussionPosts.perspectiveId, item.pageId));
         }
         const [interpreter] = await tx.select().from(pages).where(eq(pages.id, perspective.items[0].interpreterId));
         const title = `${interpreter.title}论${group.title}`;
@@ -131,7 +124,6 @@ export async function consolidateMvp(apply = false, groups = mvpMergeGroups) {
       for (const category of categories) await tx.insert(termCategories).values({ termId: group.keepId, categoryId: category.categoryId }).onConflictDoNothing();
       const [locked] = await tx.select().from(termDiscussions).where(and(inArray(termDiscussions.termId, rootIds), isNotNull(termDiscussions.lockedAt))).limit(1);
       if (locked) await tx.insert(termDiscussions).values({ ...locked, termId: group.keepId }).onConflictDoUpdate({ target: termDiscussions.termId, set: { lockedAt: locked.lockedAt, lockedBy: locked.lockedBy } });
-      await tx.update(discussionPosts).set({ termId: group.keepId }).where(inArray(discussionPosts.termId, rootIds));
       // 重复身份删除后再归属，以遵守词条 × 诠释者唯一约束。
       const duplicates = group.perspectives.flatMap(p => p.items.slice(1).map(i => i.pageId));
       for (const [oldId, newId] of ids) if (oldId !== newId) await tx.update(links).set({ targetPageId: newId }).where(eq(links.targetPageId, oldId));

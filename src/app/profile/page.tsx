@@ -7,9 +7,11 @@ import type { SubmissionStatus } from "@/db/schema";
 import { getInterestOptions, getInterestTags } from "@/lib/interests";
 import { hasAnyInterest } from "@/lib/interest-tags";
 import { getNotificationInbox } from "@/lib/notifications";
+import type { PersonalRecordKind } from "@/lib/personal-records";
 import { getSessionUser } from "@/lib/session";
 import { listMySubmissions } from "@/lib/submission-history";
 import { formatWhen, kindLabels, RejectionReason, statusLabels } from "./_components";
+import { PersonalRecordsSection } from "./_records";
 import { hasAdminRole } from "@/lib/roles";
 import { UserManagement } from "./_user-management";
 
@@ -17,7 +19,7 @@ export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = { title: "个人主页" };
 
-type Props = { searchParams: Promise<{ status?: string | string[]; userQuery?: string; userPage?: string }> };
+type Props = { searchParams: Promise<{ status?: string | string[]; records?: string | string[]; userQuery?: string; userPage?: string }> };
 
 export default async function ProfilePage({ searchParams }: Props) {
   const user = await getSessionUser();
@@ -28,6 +30,12 @@ export default async function ProfilePage({ searchParams }: Props) {
   const status =
     requestedStatus === "pending" || requestedStatus === "approved" || requestedStatus === "rejected"
       ? requestedStatus
+      : undefined;
+  // 「评论与感想」区块的三类筛选（#76）：页面评论 / 感想（公开·私密）/ 回复
+  const requestedRecords = params.records;
+  const recordsKind: PersonalRecordKind | undefined =
+    requestedRecords === "comment" || requestedRecords === "thought" || requestedRecords === "reply"
+      ? requestedRecords
       : undefined;
   const [submissions, inbox, interests, options] = await Promise.all([
     listMySubmissions(user.id, status),
@@ -140,8 +148,13 @@ export default async function ProfilePage({ searchParams }: Props) {
         )}
       </section>
 
-      <section id="notifications" aria-labelledby="notifications-heading" className="mt-10 scroll-mt-36">
-        <h2 id="notifications-heading" className="text-xl font-semibold">通知</h2>
+      <PersonalRecordsSection
+        userId={user.id}
+        kind={recordsKind}
+        current={recordsKind ? `/profile?records=${recordsKind}` : "/profile"}
+      />
+
+      <section id="notifications" aria-labelledby="notifications-heading" className="mt-10 scroll-mt-36">        <h2 id="notifications-heading" className="text-xl font-semibold">通知</h2>
         <p className="mt-2 text-sm text-muted-foreground">
           {inbox.unreadCount > 0 ? `${inbox.unreadCount} 条未读审核结果。` : "没有未读通知。"}
         </p>

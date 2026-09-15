@@ -1,11 +1,11 @@
 "use client";
 
-// 页面评论版务控件：锁定覆盖同词条总评论与各视角评论。
+// 版务锁定控件：一个词条一行锁定状态，覆盖该词条总评论、各视角评论与感想回复。
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-export function LockDiscussionButton({
+export function TermLockButton({
   termId,
   locked,
   labels = { lock: "锁定评论", unlock: "解锁评论" },
@@ -22,7 +22,7 @@ export function LockDiscussionButton({
   async function toggle() {
     setPending(true);
     setError(null);
-    const res = await fetch(`/api/admin/discussion/${termId}/lock`, {
+    const res = await fetch(`/api/admin/terms/${termId}/lock`, {
       method: locked ? "DELETE" : "POST",
     });
     if (res.ok) {

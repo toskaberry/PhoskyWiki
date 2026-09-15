@@ -20,6 +20,19 @@ describe("passage sentences", () => {
       .toEqual(["好……！”", "值为3.14，或…未定；继续", "结束"]);
     expect(splitSentences(" \n\t")).toEqual([]);
   });
+  it("ignores whitespace-only fragments so every sentence covers markable text", () => {
+    // 规范化文本把 Markdown 软换行压成一个空格；该空格自成一段分片，
+    // 不能当成句子（否则会产出没有可标记文本的句子区间，虚线渲染随之错位）
+    expect(splitSentences("A。B。 C。")).toEqual([
+      { start: 0, end: 2, text: "A。" },
+      { start: 2, end: 4, text: "B。" },
+      { start: 5, end: 7, text: "C。" },
+    ]);
+    expect(splitSentences("A。\n B。\n")).toEqual([
+      { start: 0, end: 2, text: "A。" },
+      { start: 4, end: 6, text: "B。" },
+    ]);
+  });
 });
 
 describe("passage selections", () => {

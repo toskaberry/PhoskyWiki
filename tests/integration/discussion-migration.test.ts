@@ -55,10 +55,12 @@ it("保留页面归属、正文、作者、时间、删除留痕与锁定，重�
   await pool.query(sql);
   const comments = (await pool.query("SELECT id, page_id, author_id, content, created_at, deleted_at, deleted_by FROM page_comments ORDER BY id")).rows;
   expect(comments.map(row => row.content)).toEqual(['已有评论', '词条旧讨论', '视角旧讨论']);
+  // 无视角锚点的旧楼层 → 词条总评论；带视角锚点的 → 该视角评论
   expect(comments[1]).toMatchObject({ page_id: 1, author_id: 'editor', created_at: new Date('2020-01-01Z'), deleted_at: null });
   expect(comments[2]).toMatchObject({ page_id: 3, author_id: 'editor', created_at: new Date('2020-01-02Z'), deleted_at: new Date('2021-01-01Z'), deleted_by: 'editor' });
   const replies = (await pool.query("SELECT * FROM replies ORDER BY created_at, id")).rows;
   expect(replies.map(row => row.content)).toEqual(['较早已删回复', '较晚回复']);
+  // 旧回复接到迁移后的那条评论上（新评论区自行分配 id，归属按映射一一对应）
   expect(replies[0]).toMatchObject({ target_type: 'page_comment', target_id: comments[2].id, author_id: 'editor', created_at: new Date('2020-01-03Z'), deleted_at: new Date('2021-01-02Z'), deleted_by: 'editor' });
   expect(replies[1]).toMatchObject({ target_id: comments[2].id, created_at: new Date('2020-01-04Z') });
   expect((await pool.query('SELECT * FROM term_discussions')).rows).toEqual([{ term_id: 1, locked_at: new Date('2022-01-01Z'), locked_by: 'editor' }]);
