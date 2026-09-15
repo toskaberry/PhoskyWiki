@@ -29,8 +29,8 @@ import { meiliSearchIndex } from "@/lib/search/meili-index";
 import { Meilisearch } from "meilisearch";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { POST as discussionRoute } from "@/app/api/discussion/posts/route";
-import { discussionDocId } from "@/lib/search/search-types";
+import { POST as commentRoute } from "@/app/api/comments/route";
+import { commentDocId } from "@/lib/search/search-types";
 import { Pool } from "pg";
 
 interface TestUser {
@@ -393,7 +393,7 @@ it("D06: real search failure preserves published content, exposes degradation an
     await real.replaceAll([]);
     injectSearchIndex(meiliSearchIndex({ host, apiKey: "deliberately-invalid-test-key", indexUid }));
     const fixture = await createIndexedContent("故障校对");
-    const discussion = await postJson(discussionRoute, "/api/discussion/posts", { termId: fixture.termId, content: `D06discussion ${fixture.tag}` }, editor.cookie);
+    const discussion = await postJson(commentRoute, "/api/comments", { pageId: fixture.termId, content: `D06discussion ${fixture.tag}` }, editor.cookie);
     expect(discussion.status).toBe(201);
     const pending = await submit({ kind: "new_term", title: "D06pendingprivate" }, editor);
     expect(pending.status).toBe(201);
@@ -406,7 +406,7 @@ it("D06: real search failure preserves published content, exposes degradation an
     const recovered = await status();
     expect(recovered.status).toBe(200);
     expect(await recovered.json()).toMatchObject({ ok: true, search: { degraded: false, lastReindexAt: expect.any(Number) } });
-    expect(await searchIds("D06discussion")).toContain(discussionDocId(Number(discussion.data.id)));
+    expect(await searchIds("D06discussion")).toContain(commentDocId(Number(discussion.data.id)));
     expect(await searchIds("D06pendingprivate")).toEqual([]);
     await pageAction(fixture.termId, { action: "delete" });
     const dbUrl = new URL(process.env.DATABASE_URL!);
