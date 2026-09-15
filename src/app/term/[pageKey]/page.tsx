@@ -1,5 +1,6 @@
 import { hasAdminRole } from "@/lib/roles";
 import { PageAction } from "@/components/page-action";
+import { PageComments } from "@/components/page-comments";
 import { KeyTexts } from "@/components/key-texts";
 import Link from "next/link";
 import { AgentPanel } from "@/components/agent-panel";
@@ -128,6 +129,7 @@ export default async function TermPage({ params }: Params) {
           />
         </div>
       </div>
+      <PageComments pageId={page.id} href={`/term/${pageKey(page.slug, page.id)}`} title="词条总评论" user={sessionUser} />
     </main>
   );
 }

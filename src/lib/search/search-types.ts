@@ -8,7 +8,7 @@ import { pagePath } from "@/lib/slug";
  * 可搜索的类型维度。讨论帖以楼层为粒度进索引（T13：文档主键见 discussionDocId）；
  * 消歧义/学派页不进索引（分面只做 词条/诠释者/视角/讨论）。
  */
-export const SEARCH_TYPES = ["term", "interpreter", "perspective", "discussion"] as const;
+export const SEARCH_TYPES = ["term", "interpreter", "perspective", "discussion", "comment"] as const;
 
 export type SearchableType = (typeof SEARCH_TYPES)[number];
 
@@ -17,6 +17,7 @@ export const SEARCH_TYPE_LABELS: Record<SearchableType, string> = {
   interpreter: "诠释者",
   perspective: "视角",
   discussion: "讨论",
+  comment: "页面评论",
 };
 
 /** 索引文档（PG → 索引的投影）：pageId 即 pages.id，作为索引主键（讨论帖见 discussionDocId）。 */
@@ -91,11 +92,18 @@ export function discussionPostId(docId: number): number {
   return docId - DISCUSSION_DOC_ID_OFFSET;
 }
 
+// 避开页面与旧讨论楼层的 int32 id 区间。
+export const COMMENT_DOC_ID_OFFSET = 2 ** 32;
+export function commentDocId(id: number): number { return COMMENT_DOC_ID_OFFSET + id; }
+export function pageCommentId(docId: number): number { return docId - COMMENT_DOC_ID_OFFSET; }
+
 /**
  * 命中页面的站内路径。讨论帖文档的 slug 存其词条的 pageKey（`<slug>-<id>`），
  * 命中跳到词条讨论区的对应楼层锚点。
  */
 export function searchHitHref(hit: { type: SearchableType; slug: string; pageId: number }): string {
+  // 评论文档的 slug 存目标页面路径，由 PG 投影生成。
+  if (hit.type === "comment") return `${hit.slug}#comment-${pageCommentId(hit.pageId)}`;
   return hit.type === "discussion"
     ? `/term/${hit.slug}/discussion#floor-${discussionPostId(hit.pageId)}`
     : pagePath(hit.type, hit.slug, hit.pageId);

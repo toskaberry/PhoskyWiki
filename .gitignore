@@ -78,10 +78,9 @@
 !/public/robots.txt
 !/public/site.webmanifest
 
-# Formal documentation; generated run reports stay local.
+# Documentation stays local and is not uploaded; only the migration fixtures below remain tracked.
 !/docs/
 !/docs/**/
-!/docs/**/*.md
 # Existing migration regression tests require these two evidence fixtures.
 !/docs/reports/d06-legacy-migration-hashes.json
 !/docs/reports/d06-legacy-migration-ledger.json

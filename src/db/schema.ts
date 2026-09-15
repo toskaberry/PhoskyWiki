@@ -563,15 +563,78 @@ export const discussionPosts = pgTable(
   ],
 );
 
-/** 词条讨论区的版务状态：一行 = 一个词条的讨论区（锁定时懒创建，缺席即开放；发言不建行）。 */
+/** 词条的版务锁定状态：一行 = 一个词条（锁定时懒创建，缺席即开放；发言不建行）。 */
 export const termDiscussions = pgTable("term_discussions", {
   termId: integer("term_id")
     .primaryKey()
     .references(() => terms.pageId, { onDelete: "cascade" }),
-  // 版务锁定：锁定后任何角色（含管理员）都不能再发言，解锁即恢复
+  // 版务锁定：锁定后该词条讨论区与页面评论（总评 + 各视角评论）对任何角色
+  // （含管理员）关闭新增，解锁即恢复；划线感想不受影响
   lockedAt: timestamp("locked_at", { withTimezone: true }),
   lockedBy: text("locked_by").references(() => user.id),
 });
+
+/** 页面评论分别归属词条或视角；允许的页面类型由写入边界校验。 */
+// 软删字段（spec 0009）：仍有回复的评论被删除后保留「已删除」占位，回复继续可读；
+// 无回复的评论直接物理移除，不产生软删行。
+export const pageComments = pgTable("page_comments", {
+  id: serial("id").primaryKey(),
+  pageId: integer("page_id").notNull().references(() => pages.id, { onDelete: "cascade" }),
+  authorId: text("author_id").notNull().references(() => user.id),
+  content: text("content").notNull(),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  deletedBy: text("deleted_by").references(() => user.id),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, t => [
+  index("page_comments_page_created_idx").on(t.pageId, t.createdAt, t.id),
+  check("page_comments_content_length", sql`char_length(${t.content}) between 1 and 2000`),
+]);
+
+/**
+ * 回复目标类型：页面评论先行（本工单），划线感想随感想工单扩展同一机制；
+ * 多态目标不做外键，目标存在性与可回复性由应用层按目标类型校验。
+ */
+export const replyTargetEnum = pgEnum("reply_target", ["page_comment"] as const);
+
+/**
+ * 回复（spec 0009）：挂在页面评论（后续含划线感想）之下的扁平回应列表。
+ * @ 提及只是正文前缀文本，不单独建模；扁平不嵌套——目标只能是评论本身，
+ * 「回复的回复」没有可写入的结构。列表按发表时间升序，id 兜底保证同刻稳定。
+ */
+export const replies = pgTable("replies", {
+  id: serial("id").primaryKey(),
+  targetType: replyTargetEnum("target_type").notNull(),
+  targetId: integer("target_id").notNull(),
+  authorId: text("author_id").notNull().references(() => user.id),
+  content: text("content").notNull(),
+  // 回复的软删只用于版务留痕（管理员删除后渲染占位）；作者自删即物理移除
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  deletedBy: text("deleted_by").references(() => user.id),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, t => [
+  index("replies_target_created_idx").on(t.targetType, t.targetId, t.createdAt, t.id),
+  check("replies_content_length", sql`char_length(${t.content}) between 1 and 2000`),
+]);
+
+/**
+ * 赞同目标类型：页面评论先行（本工单），划线感想随后续工单扩展同一机制；
+ * 多态目标不做外键，目标存在性与可赞同性由应用层按目标类型校验。
+ */
+export const agreeTargetEnum = pgEnum("agree_target", ["page_comment"] as const);
+
+/**
+ * 赞同：一行 = 一个用户对一个目标的认可，撤销即删行（spec 0009 Q23/Q27）。
+ * (用户, 目标) 复合主键保证唯一、重复请求不重复计数；回复不设赞同（没有对应目标类型）。
+ */
+export const agrees = pgTable("agrees", {
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  targetType: agreeTargetEnum("target_type").notNull(),
+  targetId: integer("target_id").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, t => [
+  primaryKey({ name: "agrees_pk", columns: [t.userId, t.targetType, t.targetId] }),
+  index("agrees_target_idx").on(t.targetType, t.targetId),
+]);
 
 /** T15：上传先落暂存对象；完成后冻结至独立 key，受理只发布冻结对象。 */
 export const images = pgTable("images", {

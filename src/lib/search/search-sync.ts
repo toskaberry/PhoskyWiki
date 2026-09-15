@@ -14,6 +14,7 @@ import { alias } from "drizzle-orm/pg-core";
 import { getDb, type Db } from "@/db";
 import {
   discussionPosts,
+  pageComments,
   interpreters,
   pages,
   perspectives,
@@ -23,8 +24,8 @@ import {
 } from "@/db/schema";
 import { getSearchIndex, searchIsConfigured } from "@/lib/search/search-service";
 import { withSearchLock, recordSearchFailure, recordSearchReindex, beginSearchReindex } from "@/lib/search/search-maintenance";
-import { discussionDocId, type SearchDocument } from "@/lib/search/search-types";
-import { pageKey } from "@/lib/slug";
+import { commentDocId, discussionDocId, type SearchDocument } from "@/lib/search/search-types";
+import { pageKey, pagePath } from "@/lib/slug";
 import { isPageVisible } from "@/lib/page-visibility";
 
 type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
@@ -34,6 +35,13 @@ const INDEXED_TYPES: ReadonlySet<PageType> = new Set(["term", "interpreter", "pe
 
 const pendingPageIds = new WeakMap<object, Set<number>>();
 const pendingDiscussionPostIds = new WeakMap<object, Set<number>>();
+const pendingCommentIds = new WeakMap<object, Set<number>>();
+
+export function queueCommentSync(tx: Tx, id: number): void {
+  const ids = pendingCommentIds.get(tx) ?? new Set<number>();
+  ids.add(id);
+  pendingCommentIds.set(tx, ids);
+}
 
 /** 生效管线内调用（事务中）：记录事务提交后待同步的页面。 */
 export function queueSearchSync(tx: Tx, ...pageIds: number[]): void {
@@ -65,11 +73,14 @@ export async function transactionWithSearchSync<T>(
 ): Promise<T> {
   let pending: Set<number> | undefined;
   let pendingDiscussion: Set<number> | undefined;
+  let pendingComments: Set<number> | undefined;
   const result = await db.transaction(async (tx) => {
     pending = new Set();
     pendingDiscussion = new Set();
     pendingPageIds.set(tx, pending);
     pendingDiscussionPostIds.set(tx, pendingDiscussion);
+    pendingComments = new Set();
+    pendingCommentIds.set(tx, pendingComments);
     return fn(tx);
   });
   if (pending && pending.size > 0) {
@@ -78,6 +89,7 @@ export async function transactionWithSearchSync<T>(
   if (pendingDiscussion && pendingDiscussion.size > 0) {
     await syncDiscussionPosts([...pendingDiscussion]);
   }
+  if (pendingComments?.size) await syncPageComments([...pendingComments]);
   return result;
 }
 
@@ -92,6 +104,9 @@ export async function syncPages(pageIds: number[]): Promise<void> {
     const index = getSearchIndex();
     if (removeIds.length > 0) await index.remove(removeIds);
     if (docs.length > 0) await index.upsert(docs);
+    const commentIds = (await getDb().select({ id: pageComments.id }).from(pageComments)
+      .where(inArray(pageComments.pageId, allIds))).map(row => row.id);
+    await syncPageCommentsUnlocked(commentIds);
     if (termIds.length > 0) {
       const postIds = (
         await getDb()
@@ -172,7 +187,7 @@ export async function reindexAll(): Promise<{ indexed: number }> {
     try {
       if (!searchIsConfigured()) throw new Error("SEARCH_NOT_CONFIGURED");
       const startedAt = await beginSearchReindex();
-      const docs = [...(await buildAllSearchDocuments()), ...(await buildAllDiscussionDocuments())];
+      const docs = [...(await buildAllSearchDocuments()), ...(await buildAllDiscussionDocuments()), ...(await buildCommentDocuments())];
       await getSearchIndex().replaceAll(docs);
       await recordSearchReindex(startedAt);
       return { indexed: docs.length };
@@ -471,4 +486,35 @@ async function buildAllDiscussionDocuments(): Promise<SearchDocument[]> {
     .innerJoin(termPages, eq(termPages.id, discussionPosts.termId))
     .where(and(isNull(discussionPosts.deletedAt), isNull(termPages.deletedAt)));
   return rows.map(discussionDoc);
+}
+
+/** 评论索引始终从当前在线页面投影；全量与增量采用同一可见性条件。软删占位评论退出索引。 */
+async function buildCommentDocuments(ids?: number[]): Promise<SearchDocument[]> {
+  const rows = await getDb().select({
+    id: pageComments.id, pageId: pages.id, type: pages.type,
+    title: pages.title, slug: pages.slug, content: pageComments.content,
+  }).from(pageComments).innerJoin(pages, eq(pages.id, pageComments.pageId))
+    .where(and(isPageVisible(pages.id), isNull(pageComments.deletedAt), ids ? inArray(pageComments.id, ids) : undefined));
+  return rows.map(row => ({
+    pageId: commentDocId(row.id), type: "comment", title: `「${row.title}」的评论`,
+    slug: pagePath(row.type, row.slug, row.pageId), body: row.content,
+  }));
+}
+
+async function syncPageCommentsUnlocked(ids: number[]) {
+  if (!ids.length) return;
+  const docs = await buildCommentDocuments(ids);
+  const liveIds = new Set(docs.map(doc => doc.pageId));
+  const index = getSearchIndex();
+  const removed = ids.map(commentDocId).filter(id => !liveIds.has(id));
+  if (removed.length) await index.remove(removed);
+  if (docs.length) await index.upsert(docs);
+}
+
+async function syncPageComments(ids: number[]) {
+  try { await withSearchLock(false, () => syncPageCommentsUnlocked(ids)); }
+  catch {
+    await recordSearchFailure();
+    console.error("SEARCH_COMMENT_INCREMENT_FAILED");
+  }
 }

@@ -141,6 +141,27 @@
       "when": 1789115251436,
       "tag": "0019_equal_perspectives",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1789370308235,
+      "tag": "0020_third_luckman",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1789373015736,
+      "tag": "0021_lame_skullbuster",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1789377853183,
+      "tag": "0022_lovely_molecule_man",
+      "breakpoints": true
     }
   ]
 }
