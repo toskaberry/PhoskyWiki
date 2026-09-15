@@ -2,19 +2,22 @@ import Link from "next/link";
 import { PageComments } from "@/components/page-comments";
 import { AgentPanel } from "@/components/agent-panel";
 import { HistoryLink } from "@/components/history-link";
+import { PassageMarks } from "@/components/passage-marks";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 
 import { BacklinkPanel } from "@/components/backlink-panel";
-import { Infobox, WikiContent } from "@/components/wiki-content";
+import { Infobox } from "@/components/wiki-content";
 import {
   getHeadContent,
+  getHeadRevisionId,
   getPerspectiveDetail,
   getWikiLinkTargets,
   listBacklinks,
 } from "@/lib/content";
 import { formatYears } from "@/lib/format";
 import { renderMarkdown, wikiLinkResolver } from "@/lib/markdown";
+import { listPersonalMarks } from "@/lib/passage-marks";
 import { pageIdFromKey, pageKey, pagePath } from "@/lib/slug";
 import { resolveLivePage } from "@/lib/resolve-page";
 import { getSessionUser } from "@/lib/session";
@@ -49,6 +52,10 @@ export default async function PerspectivePage({ params }: Params) {
     getSessionUser(),
   ]);
   const html = renderMarkdown(content, wikiLinkResolver(targets));
+  // 个人标记（划线）随账号云端保存；游客无标记状态但仍可拉起浮条（复制/引导登录），
+  // 选区序列化需要正文 head 修订号
+  const marks = sessionUser ? await listPersonalMarks(page.id, sessionUser.id) : null;
+  const revisionId = marks?.revisionId ?? (await getHeadRevisionId(page.id));
 
   const termHref = pagePath("term", detail.termSlug, detail.termId);
   const interpreterHref = pagePath(
@@ -98,7 +105,15 @@ export default async function PerspectivePage({ params }: Params) {
             </p>
 
             <div className="mt-8">
-              <WikiContent html={html} />
+              <PassageMarks
+                html={html}
+                pageId={page.id}
+                revisionId={revisionId}
+                initialMarks={marks?.marks ?? []}
+                initialDefaultStyle={marks?.defaultStyle ?? "highlight"}
+                loggedIn={sessionUser !== null}
+                loginHref={`/login?redirect=${encodeURIComponent(pagePath("perspective", page.slug, page.id))}`}
+              />
             </div>
           </article>
 

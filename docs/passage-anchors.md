@@ -14,7 +14,9 @@ Rebuild the index when the body DOM changes. Both historical and current bodies
 must use this same projection; the existing Agent-oriented `renderMarkdownText`
 has different whitespace rules and is not an interchangeable anchor source.
 A server adapter can project the sanitized rendered tree into `PassageNode`
-without creating a browser. Building that adapter and wiring the UI are later tickets.
+without creating a browser. That adapter lives in `src/lib/passage-body.ts`
+(`indexMarkdownBody` / `canonicalMarkdownText`); the personal-marks feature
+(spec 0009) is its first consumer.
 
 - Text in inline emphasis, links (including wiki links), and inline code remains
   contiguous. Link destinations, Markdown syntax, image alt text, comments,

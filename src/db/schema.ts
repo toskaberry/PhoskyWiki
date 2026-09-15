@@ -15,6 +15,7 @@ import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import type { MetadataSnapshot, RevisionSource } from "@/lib/revision-snapshot";
 import type { KeyText } from "@/lib/key-texts";
+import { markStyles } from "@/lib/mark-styles";
 import {
   bigint,
   boolean,
@@ -615,6 +616,64 @@ export const replies = pgTable("replies", {
   index("replies_target_created_idx").on(t.targetType, t.targetId, t.createdAt, t.id),
   check("replies_content_length", sql`char_length(${t.content}) between 1 and 2000`),
 ]);
+
+// ---------------------------------------------------------------------------
+// 个人标记（划线，spec 0009 #72）：读者在视角正文保存的文字选区标记，
+// 默认仅自己可见、随账号云端持久化。锚定字段（anchor_start/end/quote/
+// base_revision_id）的语义见 docs/passage-anchors.md 与 ADR-0008：偏移基于
+// 渲染正文的规范化文本，quote 是建标时的精确引用；正文修订后由读取端用
+// relocateAnchor 重定位，失败即「原文已变更」，不回写、不模糊匹配。
+// ---------------------------------------------------------------------------
+
+/** 个人标记样式：马克笔高光 / 实线下划线 / 波浪线（微信读书式三样式）。 */
+export const markStyleEnum = pgEnum("mark_style", markStyles);
+
+/**
+ * 一行 = 一个用户在视角正文上的一个标记。相交选区按并集合并（删旧建新），
+ * 同一用户同一视角内的标记互不相交；个人标记不受词条版务锁定影响（spec 0009 Q19）。
+ */
+export const personalMarks = pgTable(
+  "personal_marks",
+  {
+    id: serial("id").primaryKey(),
+    // 只允许视角页（正文所在处），写入边界校验页面类型
+    pageId: integer("page_id")
+      .notNull()
+      .references(() => pages.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    style: markStyleEnum("style").notNull(),
+    // 渲染正文规范化文本上的 UTF-16 半开区间（docs/passage-anchors.md）
+    anchorStart: integer("anchor_start").notNull(),
+    anchorEnd: integer("anchor_end").notNull(),
+    // 建标（或合并重锚）时的精确引用，长度与偏移在写入端校验
+    quote: text("quote").notNull(),
+    // 建标时页面的 head 修订；合并/重锚后的新标记锚定到当时的 head
+    baseRevisionId: integer("base_revision_id")
+      .notNull()
+      .references(() => revisions.id),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("personal_marks_page_user_idx").on(t.pageId, t.userId, t.anchorStart),
+    check("personal_marks_anchor_range", sql`${t.anchorStart} >= 0 and ${t.anchorEnd} > ${t.anchorStart}`),
+    check("personal_marks_quote_length", sql`char_length(${t.quote}) between 1 and 10000`),
+  ],
+);
+
+/** 用户上次选择的标记样式（缺省马克笔高光，spec 0009「新标记默认沿用上次样式」），随账号云端存储。 */
+export const userMarkStyle = pgTable("user_mark_style", {
+  userId: text("user_id")
+    .primaryKey()
+    .references(() => user.id, { onDelete: "cascade" }),
+  style: markStyleEnum("style").notNull().default("highlight"),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
 
 /**
  * 赞同目标类型：页面评论先行（本工单），划线感想随后续工单扩展同一机制；

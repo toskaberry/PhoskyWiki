@@ -88,6 +88,18 @@ export function renderMarkdown(
   return markdownProcessor(resolveWikiLink).processSync(source).toString();
 }
 
+/**
+ * 与 renderMarkdown 同一管线（含 sanitize 与图片过滤，不含 stringify）的 hast 树。
+ * 供锚定投影（lib/passage-body.ts）在服务端取得与浏览器解析渲染 HTML 等价的结构。
+ */
+export function renderMarkdownTree(
+  source: string,
+  resolveWikiLink: ResolveWikiLink,
+): Node {
+  const processor = markdownProcessor(resolveWikiLink);
+  return processor.runSync(processor.parse(source));
+}
+
 function markdownProcessor(resolveWikiLink: ResolveWikiLink) {
   return markdownParser()
     .use(rewriteWikiLinks, resolveWikiLink)
