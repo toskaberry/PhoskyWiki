@@ -4,7 +4,7 @@ import { hasAdminRole } from "@/lib/roles";
 import { commentSectionState, listPageComments } from "@/lib/page-comments";
 import { AgreePageComment, PageCommentComposer, DeletePageComment } from "@/components/page-comment-actions";
 import { PageCommentReplies } from "@/components/page-comment-replies";
-import { LockDiscussionButton } from "@/components/discussion-moderation";
+import { TermLockButton } from "@/components/term-lock-button";
 
 export async function PageComments({ pageId, href, title, user }: {
   pageId: number; href: string; title: string; user?: SessionUser | null;
@@ -17,7 +17,7 @@ export async function PageComments({ pageId, href, title, user }: {
   return <section id="comments" aria-label={title} className="mt-10 scroll-mt-8 border-t border-border pt-6">
     <div className="flex flex-wrap items-center justify-between gap-2">
       <h2 className="text-xl font-semibold">{title}</h2>
-      {viewer?.isAdmin && <LockDiscussionButton termId={termId} locked={locked} labels={{ lock: "锁定评论", unlock: "解锁评论" }} />}
+      {viewer?.isAdmin && <TermLockButton termId={termId} locked={locked} />}
     </div>
     <p className="mt-1 text-sm text-muted-foreground">{comments.length} 条评论 · 按赞同数排序，同票新在前</p>
     {locked && <p role="note" className="mt-4 rounded-md border border-border bg-muted/50 px-4 py-2 text-sm text-muted-foreground">

@@ -6,7 +6,7 @@ import { FakeSearchIndex } from "@/lib/search/fake-index";
 import {
   SEARCH_TYPES,
   SEARCH_TYPE_LABELS,
-  discussionDocId,
+  commentDocId,
   highlightHtml,
   parseSearchParams,
   searchHitHref,
@@ -61,16 +61,17 @@ describe("highlightHtml", () => {
 });
 
 describe("searchHitHref 与标签表", () => {
-  it("命中页面按 ADR-0003 寻址；讨论维度跳词条讨论区（T13 前 slug 非词条 pageKey 的旧行为已废）", () => {
+  it("命中页面按 ADR-0003 寻址；页面评论命中定位到评论区锚点", () => {
     expect(searchHitHref({ type: "term", slug: "yi-hua", pageId: 7 })).toBe("/term/yi-hua-7");
     expect(searchHitHref({ type: "perspective", slug: "p", pageId: 3 })).toBe("/perspective/p-3");
-    expect(searchHitHref({ type: "discussion", slug: "d", pageId: discussionDocId(9) })).toBe("/term/d/discussion#floor-9");
+    expect(searchHitHref({ type: "comment", slug: "/perspective/p-3", pageId: commentDocId(9) }))
+      .toBe("/perspective/p-3#comment-9");
   });
 
   it("搜索类型包含页面评论并提供中文标签", () => {
     expect(SEARCH_TYPES).toContain("comment");
     expect(SEARCH_TYPE_LABELS.comment).toBe("页面评论");
-    expect(SEARCH_TYPE_LABELS.discussion).toBe("讨论");
+    expect(SEARCH_TYPES).not.toContain("discussion");
   });
 });
 

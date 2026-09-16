@@ -1,28 +1,25 @@
 import "server-only";
 
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, inArray, isNull } from "drizzle-orm";
 import { getDb } from "@/db";
-import { discussionPosts, pageComments, pages } from "@/db/schema";
+import { pageComments, pages } from "@/db/schema";
 import { isPageVisible } from "@/lib/page-visibility";
 import { getSearchIndex } from "@/lib/search/search-service";
-import { commentDocId, pageCommentId, discussionDocId, discussionPostId, type SearchHit, type SearchQueryOptions } from "@/lib/search/search-types";
+import { commentDocId, pageCommentId, SEARCH_TYPES, type SearchHit, type SearchQueryOptions } from "@/lib/search/search-types";
 
 /** 索引同步可失败或延迟；公开内容始终由 PG 的当前可见性兜底。 */
 async function visibleHits(hits: SearchHit[]): Promise<SearchHit[]> {
   if (!hits.length) return [];
-  const pageIds = hits.filter((hit) => hit.type !== "discussion" && hit.type !== "comment").map((hit) => hit.pageId);
-  const postIds = hits.filter((hit) => hit.type === "discussion").map((hit) => discussionPostId(hit.pageId));
+  hits = hits.filter(hit => SEARCH_TYPES.includes(hit.type));
+  const pageIds = hits.filter((hit) => hit.type !== "comment").map((hit) => hit.pageId);
   const commentIds = hits.filter(hit => hit.type === "comment").map(hit => pageCommentId(hit.pageId));
-  const [livePages, livePosts, liveComments] = await Promise.all([
+  const [livePages, liveComments] = await Promise.all([
     pageIds.length ? getDb().select({ id: pages.id }).from(pages)
       .where(and(inArray(pages.id, pageIds), isPageVisible(pages.id))) : [],
-    postIds.length ? getDb().select({ id: discussionPosts.id }).from(discussionPosts)
-      .innerJoin(pages, eq(pages.id, discussionPosts.termId))
-      .where(and(inArray(discussionPosts.id, postIds), isNull(discussionPosts.deletedAt), isPageVisible(pages.id))) : [],
     commentIds.length ? getDb().select({ id: pageComments.id }).from(pageComments)
-      .where(and(inArray(pageComments.id, commentIds), isPageVisible(pageComments.pageId))) : [],
+      .where(and(inArray(pageComments.id, commentIds), isPageVisible(pageComments.pageId), isNull(pageComments.deletedAt))) : [],
   ]);
-  const ids = new Set([...livePages.map((row) => row.id), ...livePosts.map((row) => discussionDocId(row.id)), ...liveComments.map(row => commentDocId(row.id))]);
+  const ids = new Set([...livePages.map((row) => row.id), ...liveComments.map(row => commentDocId(row.id))]);
   return hits.filter((hit) => ids.has(hit.pageId));
 }
 

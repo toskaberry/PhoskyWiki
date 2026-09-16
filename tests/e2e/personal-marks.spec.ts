@@ -107,9 +107,10 @@ test("登录后三种样式渲染正确，云端保存：刷新与另一浏览�
     await selectText(page, "无意识像语言一样被结构");
     await toolbar(page).getByRole("button", { name: /马克笔划线/ }).click();
     await expect(page.locator(".pw-mark--highlight")).toHaveText("无意识像语言一样被结构");
-    await selectText(page, "言说的「我」永远无法与被言说的「我」重合");
+    // 选区含句末句读时引用也含它（锚点保存精确选文），断言按实际标记文本
+    await selectText(page, "言说的「我」永远无法与被言说的「我」重合。");
     await toolbar(page).getByRole("button", { name: /直线划线/ }).click();
-    await expect(page.locator(".pw-mark--underline")).toHaveText("言说的「我」永远无法与被言说的「我」重合");
+    await expect(page.locator(".pw-mark--underline")).toHaveText("言说的「我」永远无法与被言说的「我」重合。");
     await selectText(page, "镜像阶段");
     await toolbar(page).getByRole("button", { name: /波浪线划线/ }).click();
     await expect(page.locator(".pw-mark--squiggle")).toHaveText("镜像阶段");
@@ -117,7 +118,7 @@ test("登录后三种样式渲染正确，云端保存：刷新与另一浏览�
     // 刷新后仍在（云端随账号，非本地缓存）
     await page.reload();
     await expect(page.locator(".pw-mark--highlight")).toHaveText("无意识像语言一样被结构");
-    await expect(page.locator(".pw-mark--underline")).toHaveText("言说的「我」永远无法与被言说的「我」重合");
+    await expect(page.locator(".pw-mark--underline")).toHaveText("言说的「我」永远无法与被言说的「我」重合。");
     await expect(page.locator(".pw-mark--squiggle")).toHaveText("镜像阶段");
 
     // 换浏览器登录同一账号：标记完整恢复
@@ -125,7 +126,7 @@ test("登录后三种样式渲染正确，云端保存：刷新与另一浏览�
     await login(second);
     await second.goto(href);
     await expect(second.locator(".pw-mark--highlight")).toHaveText("无意识像语言一样被结构");
-    await expect(second.locator(".pw-mark--underline")).toHaveText("言说的「我」永远无法与被言说的「我」重合");
+    await expect(second.locator(".pw-mark--underline")).toHaveText("言说的「我」永远无法与被言说的「我」重合。");
     await expect(second.locator(".pw-mark--squiggle")).toHaveText("镜像阶段");
     // 他人与未登录用户看不到任何个人标记
     expect((await fixtureRegister(otherContext.request, { data: { name: "划线旁观者", email: otherEmail, password: "marks-e2e-password" } })).ok()).toBe(true);

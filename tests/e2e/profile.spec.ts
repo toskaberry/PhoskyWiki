@@ -149,12 +149,12 @@ test("受理与驳回通知保留理由原文，未读数与已读状态持久�
     { label: "已受理", status: "approved", submissionId: approved.submissionId },
     { label: "已驳回", status: "rejected", submissionId: rejected.submissionId },
   ]) {
-    await page.getByRole("link", { name: label, exact: true }).click();
+    await page.getByLabel("提交状态筛选").getByRole("link", { name: label, exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`/profile\\?status=${status}$`));
     await expect(page.locator("[data-submission-id]")).toHaveCount(1);
     await expect(page.locator(`[data-submission-id="${submissionId}"]`)).toBeVisible();
   }
-  await page.getByRole("link", { name: "全部", exact: true }).click();
+  await page.getByLabel("提交状态筛选").getByRole("link", { name: "全部", exact: true }).click();
   await expect(page.locator("[data-submission-id]")).toHaveCount(3);
 });
 

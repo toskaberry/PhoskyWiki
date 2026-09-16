@@ -39,31 +39,35 @@ test("可选作品信息框、诠释者编辑、讨论失效锚点与搜索回�
   await page.getByRole("button", { name: "提交（直接生效）", exact: true }).click();
   await page.getByRole("link", { name: "查看页面 →" }).click();
   await expect(page.locator("aside")).toContainText("诠释者代表作品");
-  const perspective = await create({ kind: "new_perspective", termId: term.pageId, interpreterId: interpreter.pageId, content: "讨论的公开视角" });
-  const floorResponse = await page.request.post("/api/discussion/posts", { data: { termId: term.pageId, perspectiveId: perspective.pageId, content: "已有讨论" } });
-  expect(floorResponse.status()).toBe(201);
-  const floor = await floorResponse.json();
-  for (let i = 0; i < 12; i++) await page.request.post("/api/discussion/posts", { data: { termId: term.pageId, content: `填充楼层 ${i} ` + "讨论文字。".repeat(40) } });
+  const perspective = await create({ kind: "new_perspective", termId: term.pageId, interpreterId: interpreter.pageId, content: "评论的公开视角" });
+  // 页面评论进派生索引（回复不进索引，所以命中词取评论正文）
   const needle = `uniquereply${Date.now()}`;
-  const replyResponse = await page.request.post("/api/discussion/posts", { data: { termId: term.pageId, parentId: floor.id, content: needle } });
+  const commentResponse = await page.request.post("/api/comments", { data: { pageId: perspective.pageId, content: `已有视角评论 ${needle}` } });
+  expect(commentResponse.status()).toBe(201);
+  const comment = await commentResponse.json();
+  for (let i = 0; i < 12; i++) await page.request.post("/api/comments", { data: { pageId: perspective.pageId, content: `填充评论 ${i} ` + "评论文字。".repeat(40) } });
+  const replyResponse = await page.request.post(`/api/comments/${comment.id}/replies`, { data: { content: `回复 ${needle}` } });
   expect(replyResponse.status()).toBe(201);
-  const reply = await replyResponse.json();
+  // 索引同步是异步派生数据，轮询等它落地再断言（与 page-comments.spec 同一做法）
+  await expect.poll(async () => {
+    const hits = await (await page.request.get(`/api/search?q=${encodeURIComponent(needle)}`)).json();
+    return hits.hits.some((hit: { type: string; pageId: number }) => hit.type === "comment");
+  }, { timeout: 20_000 }).toBe(true);
   await page.goto(`/search?q=${needle}`);
-  const hit = page.locator(`a[href$="#floor-${reply.id}"]`);
+  const hit = page.locator(`a[href$="#comment-${comment.id}"]`);
   await expect(hit).toBeVisible();
   await hit.click();
-  await expect(page.locator(`#floor-${reply.id}`)).toContainText(needle);
-  await expect(page.locator(`#floor-${reply.id}`)).toBeInViewport();
+  await expect(page.locator(`#comment-${comment.id}`)).toContainText(needle);
+  await expect(page.locator(`#comment-${comment.id}`)).toBeInViewport();
   expect((await page.request.post(`/api/admin/pages/${interpreter.pageId}`, { data: { action: "delete" } })).ok()).toBe(true);
   await page.reload();
-  await expect(page.locator(`#floor-${floor.id}`).locator(`a[href="${perspective.href}"]`)).toHaveCount(0);
-  expect((await page.request.post("/api/discussion/posts", { data: { termId: term.pageId, perspectiveId: perspective.pageId, content: "失效锚点" } })).status()).toBe(400);
+  await expect(page.locator(`#comment-${comment.id}`)).toHaveCount(0);
   await page.request.post(`/api/admin/pages/${interpreter.pageId}`, { data: { action: "restore" } });
   await page.reload();
-  await expect(page.locator(`#floor-${floor.id}`).locator(`a[href="${perspective.href}"]`)).toBeVisible();
+  await expect(page.locator(`#comment-${comment.id}`)).toContainText(needle);
 });
 
-test("归并后公开正文、讨论回复、分类和双链仍可阅读", async ({ page }) => {
+test("归并后公开正文、页面评论、分类和双链仍可阅读", async ({ page }) => {
   test.skip(process.env.MVP_MIGRATION_E2E !== "1" || !new URL(process.env.DATABASE_URL!).pathname.startsWith("/phoskywiki_review_"), "归并验收仅允许显式选择的隔离数据库");
   test.setTimeout(90_000);
   await page.request.post("/api/auth/sign-in/email", { data: { email: process.env.SEED_ADMIN_EMAIL, password: process.env.SEED_ADMIN_PASSWORD } });
@@ -80,8 +84,9 @@ test("归并后公开正文、讨论回复、分类和双链仍可阅读", async
   const sourceTerm = await create({ kind: "new_term", title: `Source ${title}` });
   const source = await create({ kind: "new_perspective", termId: sourceTerm.pageId, interpreterId: shared.pageId, content: `普通 [[${title}（经济学）]]，精确 [[${title}（经济学）|合并视角@${sharedName}]]` });
   const sharedPerspectiveId = second.pageId;
-  const floor = await (await page.request.post("/api/discussion/posts", { data: { termId: b.pageId, perspectiveId: sharedPerspectiveId, content: "迁移公开楼层" } })).json();
-  const reply = await (await page.request.post("/api/discussion/posts", { data: { termId: b.pageId, parentId: floor.id, content: "迁移公开回复" } })).json();
+  // 视角评论挂在视角页上：归并不动视角页 id，评论因此随视角保留（词条消失不影响）
+  const comment = await (await page.request.post("/api/comments", { data: { pageId: sharedPerspectiveId, content: "迁移公开评论" } })).json();
+  await page.request.post(`/api/comments/${comment.id}/replies`, { data: { content: "迁移公开回复" } });
   const folder = await mkdtemp(join(tmpdir(), "phosky-browser-merge-"));
   await writeFile(join(folder, "groups.json"), JSON.stringify([{ title, sourceTitles: [`${title}（哲学）`, `${title}（经济学）`] }]));
   await writeFile(join(folder, "fixture.txt"), "disposable HTTP-created fixture");
@@ -89,17 +94,15 @@ test("归并后公开正文、讨论回复、分类和双链仍可阅读", async
   await promisify(execFile)(process.execPath, ["--conditions", "react-server", "--import", "tsx", "scripts/consolidate-mvp.ts", "--database", new URL(process.env.DATABASE_URL!).pathname.slice(1), "--groups", join(folder, "groups.json"), "--apply", "--backup", join(folder, "fixture.txt")], { env: { ...process.env, MEILI_HOST: "" } });
   await page.goto(`/term/${a.pageId}`);
   await expect(page.getByRole("heading", { level: 1, name: title })).toBeVisible();
+  // 归并后原视角页正文与评论区都在原位（讨论区入口改为页面内评论）
   await page.goto(first.href);
   await expect(page.locator(".wiki-content")).toContainText("哲学公开解释");
   await expect(page.locator(".wiki-content")).toContainText("经济学公开解释");
   await expect(page.locator(".wiki-content").getByRole("link", { name: "哲学出处", exact: true })).toHaveAttribute("href", "https://example.org/philosophy");
+  await expect(page.locator(`#comment-${comment.id}`)).toContainText("迁移公开评论");
+  await expect(page.locator(`#comment-${comment.id}`)).toContainText("迁移公开回复");
   await page.locator(".wiki-content").getByRole("link", { name: "经济出处", exact: true }).click();
   await expect(page.getByRole("heading", { level: 1, name: title })).toBeVisible();
-  await page.getByRole("link", { name: /讨论区（/ }).click();
-  await expect(page.locator(`#floor-${floor.id}`)).toContainText("迁移公开楼层");
-  await expect(page.locator(`#floor-${reply.id}`)).toContainText("迁移公开回复");
-  await page.locator(`#floor-${floor.id}`).getByRole("link", { name: `${sharedName}论${title}` }).click();
-  await expect(page.locator(".wiki-content")).toContainText("经济学公开解释");
   await page.goto(unique.href);
   await expect(page.locator(".wiki-content")).toContainText("独立视角正文保留");
   await page.goto(source.href);

@@ -12,8 +12,8 @@ import { GET as LIST_COMMENTS } from "@/app/api/pages/[pageId]/comments/route";
 import { DELETE as DELETE_COMMENT } from "@/app/api/comments/[commentId]/route";
 import { POST as CREATE_REPLY } from "@/app/api/comments/[commentId]/replies/route";
 import { POST as AGREE } from "@/app/api/comments/[commentId]/agree/route";
-import { POST as LOCK_ROUTE } from "@/app/api/admin/discussion/[termId]/lock/route";
-import { DELETE as UNLOCK_ROUTE } from "@/app/api/admin/discussion/[termId]/lock/route";
+import { POST as LOCK_ROUTE } from "@/app/api/admin/terms/[termId]/lock/route";
+import { DELETE as UNLOCK_ROUTE } from "@/app/api/admin/terms/[termId]/lock/route";
 import { auth } from "@/lib/auth";
 import { getDb } from "@/db";
 import { agrees, pageComments, pages, replies, termDiscussions, user } from "@/db/schema";
@@ -89,7 +89,7 @@ async function read(pageId: number): Promise<CommentRow[]> {
 
 async function setLock(targetTermId: number, locked: boolean, session = admin.cookie) {
   const handler = locked ? LOCK_ROUTE : UNLOCK_ROUTE;
-  return handler(new Request(`http://localhost/api/admin/discussion/${targetTermId}/lock`, {
+  return handler(new Request(`http://localhost/api/admin/terms/${targetTermId}/lock`, {
     method: locked ? "POST" : "DELETE",
     headers: session ? { cookie: session } : {},
   }), { params: Promise.resolve({ termId: String(targetTermId) }) });

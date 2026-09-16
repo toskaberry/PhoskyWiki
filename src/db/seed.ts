@@ -14,11 +14,12 @@ import { seedExtendedContent } from "@/db/seed-extended";
 import {
   agrees,
   categories,
-  discussionPosts,
   interpreters,
   links,
   pageComments,
   pages,
+  passageThoughts,
+  personalMarks,
   perspectives,
   replies,
   revisions,
@@ -29,6 +30,7 @@ import {
   termCategories,
   termDiscussions,
   terms,
+  userMarkStyle,
 } from "@/db/schema";
 import { slugify } from "@/lib/slug";
 import { parseWikiLinks, wikiLinkKey } from "@/lib/wiki-links";
@@ -346,7 +348,7 @@ export async function seedDatabase(): Promise<{
   }
   const db = getDb();
   await db.execute(
-    sql`truncate table ${replies}, ${pageComments}, ${agrees}, ${termDiscussions}, ${discussionPosts}, ${submissionVotes}, ${submissions}, ${links}, ${revisions}, ${perspectives}, ${termCategories}, ${categories}, ${schoolMembers}, ${schools}, ${interpreters}, ${terms}, ${pages} restart identity cascade`,
+    sql`truncate table ${replies}, ${agrees}, ${passageThoughts}, ${pageComments}, ${personalMarks}, ${userMarkStyle}, ${termDiscussions}, ${submissionVotes}, ${submissions}, ${links}, ${revisions}, ${perspectives}, ${termCategories}, ${categories}, ${schoolMembers}, ${schools}, ${interpreters}, ${terms}, ${pages} restart identity cascade`,
   );
 
   // 词条：pages 壳 + 负载

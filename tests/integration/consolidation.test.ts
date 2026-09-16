@@ -8,7 +8,7 @@ import { Meilisearch } from "meilisearch";
 import { eq } from "drizzle-orm";
 import { seedDatabase } from "@/db/seed";
 import { getDb } from "@/db";
-import { pages, terms, perspectives, revisions, interpreters, user, discussionPosts, termCategories, categories, submissions, links } from "@/db/schema";
+import { pages, terms, perspectives, revisions, interpreters, user, pageComments, replies, termCategories, categories, submissions, links } from "@/db/schema";
 import { GET as history } from "@/app/api/pages/[pageId]/history/route";
 import { GET as graph } from "@/app/api/graph/site/route";
 import { unified } from "unified";
@@ -67,8 +67,8 @@ beforeAll(async () => {
   await db.update(pages).set({ deletedAt: new Date() }).where(eq(pages.id, hidden));
   await perspective(hidden, "应被清除");
   const [author] = await db.insert(user).values({ id: "consolidation-fixture", name: "归并夹具", email: "consolidation-fixture@example.com" }).onConflictDoUpdate({ target: user.id, set: { name: "归并夹具" } }).returning();
-  const [floor] = await db.insert(discussionPosts).values({ termId: removed, perspectiveId: second, authorId: author.id, content: "公开楼层" }).returning();
-  await db.insert(discussionPosts).values({ termId: removed, parentId: floor.id, authorId: author.id, content: "公开回复" });
+  const [floor] = await db.insert(pageComments).values({ pageId: second, authorId: author.id, content: "公开楼层" }).returning();
+  await db.insert(replies).values({ targetType: "page_comment", targetId: floor.id, authorId: author.id, content: "公开回复" });
   await db.insert(submissions).values({ kind: "edit", pageId: second, submittedBy: author.id, quorum: 2, content: "来源待审不能发布" });
   await db.insert(submissions).values({ kind: "edit", pageId: first, submittedBy: author.id, quorum: 2, content: "保留页待审" });
   const [category] = await db.select().from(categories).limit(1);
@@ -110,5 +110,5 @@ it("运维预览不改变公开页面；归并保留正文历史、清理来源�
     expect.objectContaining({ source: Math.min(kept, renamedTarget), target: Math.max(kept, renamedTarget) }),
     expect.objectContaining({ source: Math.min(kept, reusedNameTarget), target: Math.max(kept, reusedNameTarget) }),
   ]));
-  expect(await run(true)).toMatchObject({ groups: [], removedPages: 0, removedPosts: 0, removedRevisions: 0, removedSubmissions: 0 });
+  expect(await run(true)).toMatchObject({ groups: [], removedPages: 0, removedRevisions: 0, removedSubmissions: 0 });
 }, 60_000);
