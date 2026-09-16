@@ -1,6 +1,6 @@
 {
   "environment": "production",
-  "repository": "raime7/PhoskyWiki",
+  "repository": "toskaberry/PhoskyWiki",
   "directory": "/opt/phoskywiki",
   "project": "phoskywiki",
   "envFile": "/etc/phoskywiki/deployment.env",

@@ -15,6 +15,8 @@ CI 构建一次应用镜像，容器验收和完整 Playwright 使用相同镜�
 6. 不在服务器保存本机个人 GitHub 令牌。手动 workflow 将仅有 Contents/Actions/Packages read 的短期 `github.token` 随 SSH stdin 请求发送；主机只在 gh 子进程环境中使用它再次查询证据，随后通过 stdin 登录 GHCR。Docker 凭据放入本次发布独立的 0700 临时目录，正常完成或失败均删除；令牌不进入参数、输出、发布记录或应用容器。强制杀死进程可能留下临时目录，检查孤立进程后清理 `/tmp/phosky-release-auth-*`；GitHub 工作结束也会撤销该临时令牌。SSH 持有人不能提交本地收据或任意镜像。
 7. 先完成下述隔离演练，再配置真实站点；缺配置或凭据应失败，不能为获得绿灯绕过校验。D07 复验实际 SSH 限权、公开站点、恢复和 2 GB 资源。
 
+仓库改名或转移后，通过供应商控制台进入服务器，核对 GitHub 返回的 canonical `full_name`，再同步 root 0600 的 `/etc/phoskywiki/release.json` 中 `repository`。GitHub 的旧仓库 URL 即使重定向，发布门禁仍要求仓库和镜像前缀完全一致；不得通过接受任意重定向目标来绕过该校验。旧的运行镜像与备份版本继续保留其真实摘要，成功发布后才更新。更新发布工具时同时安装所有 `scripts/release*.mjs` 运行模块，并保留 root 所有权。
+
 ## 常规发布
 
 1. 每周一审查 Dependabot 的 npm/pnpm 锁文件、Actions 和 Docker 更新 PR；查看发行说明、授权变化和安全公告。所有 PR 运行相同 CI，不自动合并或部署。锁文件必须随依赖一起提交，使用 `pnpm install --frozen-lockfile` 检查。
@@ -26,6 +28,8 @@ CI 构建一次应用镜像，容器验收和完整 Playwright 使用相同镜�
 7. 浏览器核实登录、公开内容、新建/修订和图片，再宣布维护结束。版本记录与主机日志可用于排错；不要复制运行凭据、邀请链接或原始应用日志到公开 issue。
 
 ## 取消、失败与恢复
+
+发布入口在读取配置、解析请求或验证 CI 时拒绝，也会向 Actions 输出非空 `release-result.json`，包含 `phase` 和固定白名单错误码，不包含原始异常、请求或凭据。`RELEASE_NOT_QUALIFIED:REPOSITORY_MISMATCH` 表示主机仓库配置与 CI 返回身份不同；`RELEASE_EVIDENCE_FETCH_FAILED` 检查 GitHub 访问和临时令牌权限；`RELEASE_ARTIFACT_UNAVAILABLE` 检查当前 attempt 的收据是否存在且可读。`phase=deployment` 的入口异常将迁移状态标为 `unknown`，必须查看主机记录和锁，不能据此盲目重试。
 
 | 结果/阶段 | 处理 |
 | --- | --- |
