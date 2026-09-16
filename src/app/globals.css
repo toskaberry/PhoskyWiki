@@ -136,9 +136,20 @@
 }
 
 /* Markdown 渲染器输出的 wiki-link（src/lib/markdown.ts）。
-   普通双链沿用 prose 的链接样式，仅补充下划线偏移；红链是 MediaWiki 式的缺口标记。 */
+   蓝色负责导航识别，正文强调与个人划线保留自己的样式。 */
 .wiki-content .wiki-link {
-  @apply underline decoration-foreground/30 underline-offset-4;
+  @apply text-blue-700 no-underline underline-offset-4 dark:text-blue-400;
+  font-weight: inherit;
+}
+
+.wiki-content a.wiki-link:hover,
+.wiki-content a.wiki-link:focus-visible {
+  text-decoration-line: underline;
+}
+
+.wiki-content a.wiki-link:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 3px;
 }
 
 .wiki-content .wiki-link--red {
@@ -212,4 +223,70 @@
   bottom: auto;
   top: -4px;
   transform: translateX(-50%) rotate(225deg);
+}
+
+/* The preview lives outside wiki-content, so it cannot enter annotation text indexes. */
+.wiki-preview {
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  z-index: 60;
+  width: min(320px, calc(100vw - 16px));
+  box-sizing: border-box;
+  overflow: clip;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--popover);
+  color: var(--popover-foreground);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.15);
+  font-size: 14px;
+  line-height: 1.5;
+}
+.wiki-preview a {
+  @apply text-blue-700 dark:text-blue-400;
+}
+.wiki-preview a:hover, .wiki-preview a:focus-visible {
+  text-decoration: underline;
+}
+.wiki-preview-title {
+  flex-shrink: 0;
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 16px;
+  font-weight: 600;
+}
+.wiki-preview-interpreter {
+  flex-shrink: 0;
+  margin-top: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.wiki-preview-excerpt {
+  flex-shrink: 1;
+  min-height: 0;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  margin-top: 8px;
+}
+.wiki-preview-perspectives {
+  flex-shrink: 0;
+  display: grid;
+  gap: 3px;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.wiki-preview-perspectives a {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
