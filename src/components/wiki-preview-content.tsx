@@ -52,6 +52,31 @@ export function WikiPreviewContent({ html }: { html: string }) {
         if (!pointerInside && !within(document.activeElement)) close();
       }, 180);
     };
+    const locate = (link: HTMLAnchorElement) => {
+      const rect = link.getBoundingClientRect();
+      const width = Math.min(320, window.innerWidth - 16);
+      const bottom = Math.min(window.innerHeight, Math.max(0, rect.bottom));
+      const topEdge = Math.min(window.innerHeight, Math.max(0, rect.top));
+      const spaceBelow = Math.max(0, window.innerHeight - bottom - 16);
+      const spaceAbove = Math.max(0, topEdge - 16);
+      const above = spaceBelow < 280 && spaceAbove > spaceBelow;
+      const maxHeight = Math.min(280, above ? spaceAbove : spaceBelow);
+      const top = above ? topEdge - 8 : bottom + 8;
+      return {
+        left: Math.max(8, Math.min(rect.left, window.innerWidth - width - 8)),
+        top, maxHeight, above,
+      };
+    };
+    const reposition = () => {
+      if (!anchor || !visible) return;
+      const rect = anchor.getBoundingClientRect();
+      if (rect.bottom <= 0 || rect.top >= window.innerHeight || rect.right <= 0 || rect.left >= window.innerWidth) {
+        close();
+        return;
+      }
+      const position = locate(anchor);
+      setPreview(current => current ? { ...current, ...position } : null);
+    };
     const activate = (link: HTMLAnchorElement, delay: number) => {
       clearTimeout(closing);
       if (anchor === link && (opening || visible)) return;
@@ -61,17 +86,7 @@ export function WikiPreviewContent({ html }: { html: string }) {
         opening = undefined;
         const pageId = pageIdFromKey(new URL(link.href).pathname.split("/").pop() ?? "");
         if (pageId === null) return;
-        const rect = link.getBoundingClientRect();
-        const width = Math.min(320, window.innerWidth - 16);
-        const maxHeight = Math.min(280, window.innerHeight - 16);
-        const below = rect.bottom + 8;
-        const fitsBelow = below + maxHeight <= window.innerHeight - 8;
-        const above = !fitsBelow && rect.top >= maxHeight + 8;
-        const top = fitsBelow ? below : above ? rect.top - 8 : 8;
-        const position = {
-          left: Math.max(8, Math.min(rect.left, window.innerWidth - width - 8)),
-          top, maxHeight, above,
-        };
+        const position = locate(link);
         visible = true;
         link.setAttribute("aria-controls", id);
         link.setAttribute("aria-expanded", "true");
@@ -84,9 +99,9 @@ export function WikiPreviewContent({ html }: { html: string }) {
           });
           if (!response.ok) throw new Error("Preview unavailable");
           const content: WikiPreview = await response.json();
-          if (!currentRequest.signal.aborted) setPreview({ ...position, content });
+          if (!currentRequest.signal.aborted) setPreview(current => current ? { ...current, content } : null);
         } catch {
-          if (!currentRequest.signal.aborted) setPreview({ ...position, content: "error" });
+          if (!currentRequest.signal.aborted) setPreview(current => current ? { ...current, content: "error" } : null);
         }
       }, delay);
     };
@@ -142,8 +157,8 @@ export function WikiPreviewContent({ html }: { html: string }) {
         const next = focusable[focusable.indexOf(anchor) + 1];
         if (next) {
           event.preventDefault();
-          next.focus();
           close();
+          next.focus();
         }
       }
     };
@@ -152,8 +167,8 @@ export function WikiPreviewContent({ html }: { html: string }) {
     document.addEventListener("focusin", onFocusIn);
     document.addEventListener("focusout", onFocusOut);
     document.addEventListener("keydown", onKeyDown);
-    window.addEventListener("resize", close);
-    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", reposition);
+    window.addEventListener("scroll", reposition, true);
     return () => {
       close();
       document.removeEventListener("pointerover", onPointerOver);
@@ -161,8 +176,8 @@ export function WikiPreviewContent({ html }: { html: string }) {
       document.removeEventListener("focusin", onFocusIn);
       document.removeEventListener("focusout", onFocusOut);
       document.removeEventListener("keydown", onKeyDown);
-      window.removeEventListener("resize", close);
-      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", reposition);
+      window.removeEventListener("scroll", reposition, true);
     };
   }, [html, id]);
 
@@ -177,10 +192,10 @@ export function WikiPreviewContent({ html }: { html: string }) {
         ) : <>
           <a className="wiki-preview-title" href={preview.content.href}>{preview.content.title}</a>
           {preview.content.type === "perspective" && <p className="wiki-preview-interpreter">诠释者：{preview.content.interpreterName}</p>}
-          <p className="wiki-preview-excerpt">{preview.content.excerpt || (preview.content.type === "term" ? "暂无简介" : "暂无正文")}</p>
+          {preview.maxHeight >= 120 && <p className="wiki-preview-excerpt">{preview.content.excerpt || (preview.content.type === "term" ? "暂无简介" : "暂无正文")}</p>}
           {preview.content.type === "term" && preview.content.perspectiveCount > 0 && (
             <nav aria-label="视角入口" className="wiki-preview-perspectives">
-              {preview.content.perspectives.map(perspective => <a key={perspective.href} href={perspective.href}>{perspective.title}</a>)}
+              {(preview.maxHeight >= 180 ? preview.content.perspectives : []).map(perspective => <a key={perspective.href} href={perspective.href}>{perspective.title}</a>)}
               <a href={preview.content.href}>查看全部（{preview.content.perspectiveCount}）</a>
             </nav>
           )}
