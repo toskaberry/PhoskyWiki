@@ -20,12 +20,10 @@ import {
   agrees,
   pages,
   passageThoughts,
-  personalMarks,
   perspectives,
   replies,
   revisions,
   user,
-  userMarkStyle,
   type ThoughtVisibility,
 } from "@/db/schema";
 import { hasAdminRole } from "@/lib/roles";
@@ -34,7 +32,7 @@ import { termLockedAt } from "@/lib/term-lock";
 import { isPageVisible } from "@/lib/page-visibility";
 import { canonicalMarkdownText } from "@/lib/passage-body";
 import { relocateAnchor } from "@/lib/passage-anchors";
-import { positiveId, PassageMarkError } from "@/lib/passage-marks";
+import { positiveId, PassageMarkError, mergePersonalMark } from "@/lib/passage-marks";
 import type { PageThoughtsState, ThoughtReplyView, ThoughtView } from "@/lib/thought-types";
 
 type Reader = Pick<Db, "select">;
@@ -100,7 +98,7 @@ async function loadText(db: Reader, revisionId: number, pageId: number): Promise
 /** 意见的治理词条：视角页所属词条（版务锁定按词条判定，与页面评论同口径）。 */
 async function thoughtTermId(db: Reader, pageId: number): Promise<number | null> {
   const [row] = await db.select({ termId: perspectives.termId }).from(perspectives)
-    .where(and(eq(perspectives.pageId, pageId), isPageVisible(perspectives.termId)));
+    .where(and(eq(perspectives.pageId, pageId), isPageVisible(perspectives.pageId)));
   return row?.termId ?? null;
 }
 
@@ -209,6 +207,7 @@ function thoughtView(
   range: { start: number; end: number } | null,
   viewerId: string | undefined,
   agreeState: { count: number; agreed: boolean },
+  isAdmin: boolean,
 ): ThoughtView {
   const deleted = row.deletedAt !== null;
   return {
@@ -228,7 +227,8 @@ function thoughtView(
     status: range ? "located" : "original-changed",
     start: range?.start ?? null,
     end: range?.end ?? null,
-    canDelete: !deleted && (row.authorId === viewerId || false),
+    canDelete: !deleted && (row.authorId === viewerId || (isAdmin && row.visibility === "public")),
+    canChangeVisibility: !deleted && row.authorId === viewerId,
     replyable: !deleted,
     replies: [],
   };
@@ -246,6 +246,8 @@ export async function listPageThoughts(pageId: number, viewerId?: string): Promi
 
 /** 读路径共用实现：可跑在连接池上，也可跑在写入事务内（listPageThoughtsWith）。 */
 async function loadThoughts(db: AnyReader, pageId: number, viewerId?: string): Promise<PageThoughtsState> {
+  const [viewer] = viewerId ? await db.select({ role: user.role }).from(user).where(eq(user.id, viewerId)) : [];
+  const isAdmin = viewer !== undefined && hasAdminRole(viewer.role);
   const head = await loadHead(db, pageId);
   if (!head) throw new PassageThoughtError(404, "页面不存在或不可发表感想");
   const agreeCount = sql<number>`(select count(*)::int from ${agrees} where ${agrees.targetType} = 'passage_thought' and ${agrees.targetId} = ${passageThoughts.id})`;
@@ -264,9 +266,9 @@ async function loadThoughts(db: AnyReader, pageId: number, viewerId?: string): P
     .orderBy(desc(agreeCount), desc(passageThoughts.createdAt), desc(passageThoughts.id));
   const located = await locateThoughts(db, pageId, head, rows);
   const thoughts = located
-    .map(({ row, range }) => thoughtView(row, range, viewerId, { count: row.agreeCount, agreed: row.agreed }))
+    .map(({ row, range }) => thoughtView(row, range, viewerId, { count: row.agreeCount, agreed: row.agreed }, isAdmin))
     .sort((a, b) => b.agreeCount - a.agreeCount || b.createdAt.localeCompare(a.createdAt) || b.id - a.id);
-  const repliesByTarget = await loadThoughtReplies(thoughts.map(thought => thought.id), viewerId);
+  const repliesByTarget = await loadThoughtReplies(db, thoughts, viewerId, isAdmin);
   return {
     thoughts: thoughts.map(thought => ({ ...thought, replies: repliesByTarget.get(thought.id) ?? [] })),
     revisionId: head.id,
@@ -274,10 +276,11 @@ async function loadThoughts(db: AnyReader, pageId: number, viewerId?: string): P
 }
 
 /** 回复随感想一并返回（时间升序）；管理员的处置权限不延伸到他人私密感想（spec 0009 #74）。 */
-async function loadThoughtReplies(thoughtIds: number[], viewerId: string | undefined) {
+async function loadThoughtReplies(db: AnyReader, thoughts: ThoughtView[], viewerId: string | undefined, isAdmin: boolean) {
   const byTarget = new Map<number, ThoughtReplyView[]>();
+  const thoughtIds = thoughts.map(thought => thought.id);
   if (!thoughtIds.length) return byTarget;
-  const db = getDb();
+  const publicIds = new Set(thoughts.filter(thought => thought.visibility === "public").map(thought => thought.id));
   const rows = await db.select({
     id: replies.id, targetId: replies.targetId, content: replies.content, deletedAt: replies.deletedAt,
     createdAt: replies.createdAt, authorId: replies.authorId, authorName: user.name,
@@ -294,7 +297,7 @@ async function loadThoughtReplies(thoughtIds: number[], viewerId: string | undef
       authorName: deleted ? "" : row.authorName,
       createdAt: row.createdAt.toISOString(),
       deleted,
-      canDelete: !deleted && row.authorId === viewerId,
+      canDelete: !deleted && (row.authorId === viewerId || (isAdmin && publicIds.has(row.targetId))),
     });
     byTarget.set(row.targetId, bucket);
   }
@@ -359,45 +362,9 @@ export async function createThought(input: CreateThoughtInput, authorId: string)
     });
     // 写感想即自动划线（spec 0009 Q12）：只在能对上现行正文时补，落库锚定 head
     if (outcome.status === "located") {
-      await mergePersonalMark(tx, pageId, authorId, style, outcome.range, currentText, head.id);
-      await tx.insert(userMarkStyle).values({ userId: authorId, style })
-        .onConflictDoUpdate({ target: userMarkStyle.userId, set: { style, updatedAt: new Date() } });
+      await mergePersonalMark(tx, pageId, authorId, style, outcome.range, head);
     }
     return listPageThoughtsIn(tx, pageId, authorId);
-  });
-}
-
-/**
- * 划线合并（与 lib/passage-marks.createPersonalMark 同规则）：新选区与既有可定位标记
- * 相交时取并集，删旧建新不叠画。此处只服务「写感想自动划线」，样式取浮条当前选择。
- */
-async function mergePersonalMark(
-  tx: Tx,
-  pageId: number,
-  userId: string,
-  style: MarkStyle,
-  range: { start: number; end: number },
-  currentText: string,
-  headRevisionId: number,
-) {
-  const rows = await tx.select({
-    id: personalMarks.id, anchorStart: personalMarks.anchorStart, anchorEnd: personalMarks.anchorEnd,
-    quote: personalMarks.quote, baseRevisionId: personalMarks.baseRevisionId,
-  }).from(personalMarks).where(and(eq(personalMarks.pageId, pageId), eq(personalMarks.userId, userId)));
-  const union = { start: range.start, end: range.end };
-  const merging = rows.filter(row => row.baseRevisionId === headRevisionId
-    && row.anchorStart < union.end && row.anchorEnd > union.start
-    && currentText.slice(row.anchorStart, row.anchorEnd) === row.quote);
-  for (const row of merging) {
-    union.start = Math.min(union.start, row.anchorStart);
-    union.end = Math.max(union.end, row.anchorEnd);
-  }
-  if (merging.length) await tx.delete(personalMarks).where(inArray(personalMarks.id, merging.map(row => row.id)));
-  await tx.insert(personalMarks).values({
-    pageId, userId, style,
-    anchorStart: union.start, anchorEnd: union.end,
-    quote: currentText.slice(union.start, union.end),
-    baseRevisionId: headRevisionId,
   });
 }
 
@@ -519,9 +486,9 @@ export async function deleteThoughtReply(replyId: number, actorId: string): Prom
     if (reply.authorId !== actorId) {
       // 管理员的处置不延伸到他人私密感想下的回复：不可见即不可处置（spec 0009 #74）
       const [thought] = await tx.select({
-        visibility: passageThoughts.visibility, authorId: passageThoughts.authorId, deletedAt: passageThoughts.deletedAt,
+        visibility: passageThoughts.visibility,
       }).from(passageThoughts).where(eq(passageThoughts.id, reply.targetId));
-      if (thought && (thought.visibility === "private" || thought.deletedAt !== null)) {
+      if (!thought || thought.visibility === "private") {
         throw new PassageThoughtError(403, "只能删除自己的回复");
       }
       await tx.update(replies).set({ deletedAt: new Date(), deletedBy: actorId }).where(eq(replies.id, replyId));
@@ -548,4 +515,3 @@ export async function thoughtResponse(action: () => Promise<Response>) {
     throw error;
   }
 }
-

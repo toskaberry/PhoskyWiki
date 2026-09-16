@@ -3,7 +3,8 @@ import { beforeAll, beforeEach, expect, it } from "vitest";
 import { and, eq, inArray } from "drizzle-orm";
 import { getDb } from "@/db";
 import { seedDatabase } from "@/db/seed";
-import { agrees, pages, passageThoughts, personalMarks, replies, revisions, termDiscussions, user } from "@/db/schema";
+import { agrees, pages, passageThoughts, personalMarks, perspectives, replies, revisions, termDiscussions, user } from "@/db/schema";
+import { createPersonalMark, listPersonalMarks } from "@/lib/passage-marks";
 import { auth } from "@/lib/auth";
 import { fixtureSignUp } from "./auth-fixture";
 import { canonicalMarkdownText } from "@/lib/passage-body";
@@ -65,6 +66,46 @@ it("creates a public thought and personal mark atomically, preserving quote and 
   expect(listed.thoughts).toEqual([expect.objectContaining({ id, quote: anchor.quote, baseRevisionId: Number(anchor.baseRevisionId), status: "located", authorName: "感想作者" })]);
   const marks = await getDb().select().from(personalMarks).where(eq(personalMarks.userId, author.id));
   expect(marks).toHaveLength(1); expect(marks[0].quote).toBe(anchor.quote);
+});
+
+it.each(["perspective", "interpreter"])("rejects replies after the %s is soft deleted", async kind => {
+  const { id } = (await (await create()).json()).thoughts[0];
+  const [perspective] = await getDb().select().from(perspectives).where(eq(perspectives.pageId, pageId));
+  const hiddenId = kind === "perspective" ? pageId : perspective.interpreterId;
+  await getDb().update(pages).set({ deletedAt: new Date() }).where(eq(pages.id, hiddenId));
+  expect((await reply(id)).status).toBe(404);
+  expect(await getDb().select().from(replies).where(eq(replies.targetType, "passage_thought"))).toEqual([]);
+});
+
+it("merges automatic marks with relocated marks from earlier revisions", async () => {
+  await createPersonalMark(pageId, { anchor, style: "underline" }, author.id);
+  const [base] = await getDb().select().from(revisions).where(eq(revisions.id, Number(anchor.baseRevisionId)));
+  const [head] = await getDb().insert(revisions).values({
+    pageId, content: `${base.content}\n\n新增段落。`, createdBy: author.id,
+  }).returning();
+  expect((await listPersonalMarks(pageId, author.id)).marks[0].status).toBe("located");
+  const response = await create("public", { anchor: { ...anchor, baseRevisionId: String(head.id) } });
+  expect(response.status).toBe(201);
+  const marks = (await listPersonalMarks(pageId, author.id)).marks;
+  expect(marks).toHaveLength(1);
+  expect(marks[0]).toMatchObject({ status: "located", style: "highlight", quote: anchor.quote });
+});
+
+it("exposes moderation separately from author-only visibility controls", async () => {
+  const { id } = (await (await create()).json()).thoughts[0];
+  await reply(id);
+  expect((await read(admin.cookie)).thoughts[0]).toMatchObject({
+    canDelete: true, canChangeVisibility: false,
+    replies: [expect.objectContaining({ canDelete: true })],
+  });
+  expect((await read(author.cookie)).thoughts[0]).toMatchObject({ canDelete: true, canChangeVisibility: true });
+  expect((await read(other.cookie)).thoughts[0]).toMatchObject({ canDelete: false, canChangeVisibility: false });
+  expect((await change(id, "private", admin.cookie)).status).toBe(403);
+  expect((await DELETE(request("/", "DELETE", admin.cookie), context(id))).status).toBe(204);
+  const retained = (await read(admin.cookie)).thoughts[0];
+  expect(retained.deleted).toBe(true);
+  expect(retained.replies[0].canDelete).toBe(true);
+  expect((await DELETE_REPLY(request("/", "DELETE", admin.cookie), { params: Promise.resolve({ replyId: String(retained.replies[0].id) }) })).status).toBe(204);
 });
 it("private thoughts, replies and personal author details never reach visitors, other readers or admins", async () => {
   const { id } = (await (await create("private")).json()).thoughts[0];

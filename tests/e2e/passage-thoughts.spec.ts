@@ -5,9 +5,66 @@ import { expect, test, type APIRequestContext, type Page } from "./fixtures";
 import { fixtureRegister } from "./auth-fixture";
 import { cleanupTestContent } from "./content-cleanup";
 import { getDb } from "../../src/db";
-import { user } from "../../src/db/schema";
+import { replies, user } from "../../src/db/schema";
 
 const content = "第一句包含部分引用。第二句继续讨论。\n\n第三句跨越段落。";
+
+test("个人记录回到原句，游客互动登录后回到感想，管理员可处置公开内容", async ({ page, browser }) => {
+  test.skip(!process.env.SEED_ADMIN_PASSWORD, "需要种子管理员密码");
+  test.setTimeout(90_000);
+  const source = await setup(page);
+  const readerContext = await browser.newContext();
+  const guestContext = await browser.newContext();
+  const email = `thought-review-${randomUUID()}@example.com`;
+  try {
+    expect((await fixtureRegister(readerContext.request, { data: { name: "感想回归读者", email, password: "thought-reader-password" } })).ok()).toBe(true);
+    const response = await readerContext.request.post("/api/thoughts", { data: {
+      pageId: source.pageId, anchor: { start: 0, end: 10, quote: "第一句包含部分引用。", baseRevisionId: String(source.revision) },
+      content: "用于定位的公开感想", visibility: "public", style: "highlight",
+    } });
+    expect(response.status()).toBe(201);
+    const thought = (await response.json()).thoughts[0];
+    const reader = await readerContext.newPage();
+    await reader.goto("/profile?records=thought");
+    const record = reader.locator(`[data-record-kind="thought"][data-record-id="${thought.id}"]`);
+    await record.getByRole("link", { name: "回到原句" }).click();
+    await expect(reader.locator(`#thought-${thought.id}`)).toBeFocused();
+    await expect(reader.locator(`#thought-${thought.id}`)).toBeInViewport();
+    await expect(reader.getByRole("dialog", { name: "句子想法" })).toContainText("用于定位的公开感想");
+
+    const guest = await guestContext.newPage();
+    for (const action of ["赞同想法", "回复想法"]) {
+      await guest.goto(source.href);
+      await sentenceMarker(guest, 0).first().click();
+      await guest.getByRole("button", { name: action, exact: true }).click();
+      await expect(guest).toHaveURL(/\/login\?/);
+      expect(new URL(guest.url()).searchParams.get("redirect")).toBe(`${encodeURI(source.href)}#thought-${thought.id}`);
+    }
+    await guest.getByLabel("邮箱").fill(email);
+    await guest.getByLabel("密码").fill("thought-reader-password");
+    await guest.getByRole("button", { name: "登录", exact: true }).click();
+    await expect(guest.locator(`#thought-${thought.id}`)).toBeFocused();
+
+    expect((await readerContext.request.post(`/api/thoughts/${thought.id}/replies`, { data: { content: "用于版务的回复" } })).status()).toBe(201);
+    await page.goto(`${source.href}#thought-${thought.id}`);
+    const panel = page.getByRole("dialog", { name: "句子想法" });
+    await expect(panel.locator("blockquote")).toHaveText("引用：第一句包含部分引用。");
+    await expect(panel.getByRole("button", { name: "设为仅自己可见" })).toHaveCount(0);
+    await expect(panel.getByRole("button", { name: "赞同想法", exact: true })).toBeVisible();
+    await panel.getByRole("button", { name: "删除想法", exact: true }).click();
+    await expect(panel).toContainText("该想法已被删除");
+    await panel.getByRole("button", { name: "删除回复", exact: true }).click();
+    await expect(panel).toContainText("该回复已删除");
+  } finally {
+    await readerContext.close();
+    await guestContext.close();
+    await cleanupTestContent(source.titles, page.request);
+    const [account] = await getDb().select({ id: user.id }).from(user).where(eq(user.email, email));
+    // Polymorphic replies have no FK to pages; remove only this fixture's retained reply.
+    if (account) await getDb().delete(replies).where(eq(replies.authorId, account.id));
+    await getDb().delete(user).where(eq(user.email, email));
+  }
+});
 
 /** 句子虚线（一句可能被内层个人标记切成多段）：按句起点定位，一段即一句。 */
 const sentenceMarker = (scope: Page, sentenceStart: number) =>

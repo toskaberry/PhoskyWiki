@@ -46,29 +46,34 @@ it("保留页面归属、正文、作者、时间、删除留痕与锁定，重�
       (1, 1, NULL, NULL, '词条旧讨论', 'editor', '2020-01-01Z', NULL, NULL),
       (2, 1, 3, NULL, '视角旧讨论', 'editor', '2020-01-02Z', '2021-01-01Z', 'editor'),
       (3, 1, NULL, 2, '较晚回复', 'editor', '2020-01-04Z', NULL, NULL),
-      (4, 1, NULL, 2, '较早已删回复', 'editor', '2020-01-03Z', '2021-01-02Z', 'editor');
+      (4, 1, NULL, 2, '较早已删回复', 'editor', '2020-01-03Z', '2021-01-02Z', 'editor'),
+      (5, 1, 3, NULL, '词条旧讨论', 'editor', '2020-01-01Z', NULL, NULL),
+      (6, 1, NULL, 1, '同文异页的回复', 'editor', '2020-01-05Z', NULL, NULL);
     INSERT INTO term_discussions (term_id, locked_at, locked_by) VALUES (1, '2022-01-01Z', 'editor');
     INSERT INTO search_maintenance (index_uid, last_reindex_result) VALUES ('pages-test', 'success');
   `);
   // A missing migration is an empty operation, so the first failure names the missing behavior.
   const sql = await migration().catch(() => "SELECT 1");
-  await pool.query(sql);
+  // Exercise the production migration entry point, including journal discovery.
+  await migrate(drizzle(pool), { migrationsFolder: "drizzle" });
   const comments = (await pool.query("SELECT id, page_id, author_id, content, created_at, deleted_at, deleted_by FROM page_comments ORDER BY id")).rows;
-  expect(comments.map(row => row.content)).toEqual(['已有评论', '词条旧讨论', '视角旧讨论']);
+  expect(comments.map(row => row.content)).toEqual(['已有评论', '词条旧讨论', '视角旧讨论', '词条旧讨论']);
   // 无视角锚点的旧楼层 → 词条总评论；带视角锚点的 → 该视角评论
   expect(comments[1]).toMatchObject({ page_id: 1, author_id: 'editor', created_at: new Date('2020-01-01Z'), deleted_at: null });
   expect(comments[2]).toMatchObject({ page_id: 3, author_id: 'editor', created_at: new Date('2020-01-02Z'), deleted_at: new Date('2021-01-01Z'), deleted_by: 'editor' });
   const replies = (await pool.query("SELECT * FROM replies ORDER BY created_at, id")).rows;
-  expect(replies.map(row => row.content)).toEqual(['较早已删回复', '较晚回复']);
+  expect(replies.map(row => row.content)).toEqual(['较早已删回复', '较晚回复', '同文异页的回复']);
   // 旧回复接到迁移后的那条评论上（新评论区自行分配 id，归属按映射一一对应）
   expect(replies[0]).toMatchObject({ target_type: 'page_comment', target_id: comments[2].id, author_id: 'editor', created_at: new Date('2020-01-03Z'), deleted_at: new Date('2021-01-02Z'), deleted_by: 'editor' });
   expect(replies[1]).toMatchObject({ target_id: comments[2].id, created_at: new Date('2020-01-04Z') });
+  expect(replies[2]).toMatchObject({ target_id: comments[1].id });
+  expect(comments[3]).toMatchObject({ page_id: 3 });
   expect((await pool.query('SELECT * FROM term_discussions')).rows).toEqual([{ term_id: 1, locked_at: new Date('2022-01-01Z'), locked_by: 'editor' }]);
   await pool.query(sql);
-  expect((await pool.query('SELECT count(*)::int AS n FROM page_comments')).rows[0].n).toBe(3);
-  expect((await pool.query('SELECT count(*)::int AS n FROM replies')).rows[0].n).toBe(2);
+  expect((await pool.query('SELECT count(*)::int AS n FROM page_comments')).rows[0].n).toBe(4);
+  expect((await pool.query('SELECT count(*)::int AS n FROM replies')).rows[0].n).toBe(3);
   await pool.query('DELETE FROM replies');
-  await pool.query('DELETE FROM page_comments WHERE id = ANY($1)', [[comments[1].id, comments[2].id]]);
+  await pool.query('DELETE FROM page_comments WHERE id = ANY($1)', [[comments[1].id, comments[2].id, comments[3].id]]);
   await pool.query(sql);
   expect((await pool.query('SELECT content FROM page_comments')).rows).toEqual([{ content: '已有评论' }]);
   expect((await pool.query('SELECT count(*)::int AS n FROM replies')).rows[0].n).toBe(0);

@@ -193,33 +193,46 @@ export async function createPersonalMark(pageId: number, input: unknown, userId:
       throw new PassageMarkError(409, "正文已更新，标记未能对齐当前内容；刷新页面后再试");
     }
     const range = outcome.range;
-    // 相交合并：只合并能在现行正文上定位的标记；「原文已变更」的旧行不动
-    const rows: MarkRow[] = await tx.select(markRowColumns).from(personalMarks)
-      .where(and(eq(personalMarks.pageId, pageId), eq(personalMarks.userId, userId)));
-    const located: LocatedMarkView[] = (await locateMarkRows(tx, pageId, head, rows)).filter(isLocatedMark);
-    const union = { start: range.start, end: range.end };
-    const merging: number[] = [];
-    for (const row of located) {
-      if (row.start < union.end && row.end > union.start) {
-        merging.push(row.id);
-        union.start = Math.min(union.start, row.start);
-        union.end = Math.max(union.end, row.end);
-      }
-    }
-    if (merging.length) {
-      await tx.delete(personalMarks).where(inArray(personalMarks.id, merging));
-    }
-    await tx.insert(personalMarks).values({
-      pageId, userId, style,
-      anchorStart: union.start, anchorEnd: union.end,
-      quote: currentText.slice(union.start, union.end),
-      baseRevisionId: head.id,
-    });
-    // 上次选择的样式随账号保存，作为新标记的默认样式
-    await tx.insert(userMarkStyle).values({ userId, style })
-      .onConflictDoUpdate({ target: userMarkStyle.userId, set: { style, updatedAt: new Date() } });
+    await mergePersonalMark(tx, pageId, userId, style, range, head);
     return loadState(tx, pageId, userId);
   });
+}
+
+/** 在已锁定页面的事务内重定位、合并划线，并保存样式偏好；手动和感想自动划线共用。 */
+export async function mergePersonalMark(
+  tx: Parameters<Parameters<Db["transaction"]>[0]>[0],
+  pageId: number,
+  userId: string,
+  style: MarkStyle,
+  range: ContentRange,
+  head: { id: number; content: string },
+): Promise<void> {
+  const currentText = canonicalMarkdownText(head.content);
+  // 相交合并：只合并能在现行正文上定位的标记；「原文已变更」的旧行不动
+  const rows: MarkRow[] = await tx.select(markRowColumns).from(personalMarks)
+    .where(and(eq(personalMarks.pageId, pageId), eq(personalMarks.userId, userId)));
+  const located: LocatedMarkView[] = (await locateMarkRows(tx, pageId, head, rows)).filter(isLocatedMark);
+  const union = { start: range.start, end: range.end };
+  const merging: number[] = [];
+  for (const row of located) {
+    if (row.start < union.end && row.end > union.start) {
+      merging.push(row.id);
+      union.start = Math.min(union.start, row.start);
+      union.end = Math.max(union.end, row.end);
+    }
+  }
+  if (merging.length) {
+    await tx.delete(personalMarks).where(inArray(personalMarks.id, merging));
+  }
+  await tx.insert(personalMarks).values({
+    pageId, userId, style,
+    anchorStart: union.start, anchorEnd: union.end,
+    quote: currentText.slice(union.start, union.end),
+    baseRevisionId: head.id,
+  });
+  // 上次选择的样式随账号保存，作为新标记的默认样式
+  await tx.insert(userMarkStyle).values({ userId, style })
+    .onConflictDoUpdate({ target: userMarkStyle.userId, set: { style, updatedAt: new Date() } });
 }
 
 /** 删除自己的标记（个人标记无版务处置；行按 (id, userId) 精确命中）。 */

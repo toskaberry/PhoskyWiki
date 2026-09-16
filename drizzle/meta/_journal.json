@@ -176,6 +176,13 @@
       "when": 1789450965712,
       "tag": "0024_passage_thoughts",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1789450965713,
+      "tag": "0025_discussion_migration",
+      "breakpoints": true
     }
   ]
 }

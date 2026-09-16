@@ -32,6 +32,7 @@ export interface ThoughtView {
   end: number | null;
   canDelete: boolean;
   replyable: boolean;
+  canChangeVisibility: boolean;
   replies: ThoughtReplyView[];
 }
 

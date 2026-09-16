@@ -11,19 +11,18 @@ DO $$ BEGIN
   IF to_regclass('public.discussion_posts') IS NULL THEN
     RETURN;
   END IF;
+  -- 先为源主键分配目标主键；内容和时间并不唯一，不能用它们反查归属。
   CREATE TEMP TABLE migration_discussion_parents ON COMMIT DROP AS
-  WITH migrated AS (
-    INSERT INTO "page_comments" ("page_id", "author_id", "content", "deleted_at", "deleted_by", "created_at")
-    SELECT COALESCE(p."perspective_id", p."term_id"), p."author_id", p."content", p."deleted_at", p."deleted_by", p."created_at"
-    FROM "discussion_posts" p
-    WHERE p."parent_id" IS NULL
-    RETURNING "id", "content", "created_at"
-  )
-  -- 顶层楼层与迁移后评论的一一对应（同内容同时间；旧楼层不存在两条完全相同）
-  SELECT p."id" AS source_id, m."id" AS comment_id
+  SELECT p."id" AS source_id,
+         nextval(pg_get_serial_sequence('page_comments', 'id'))::integer AS comment_id
   FROM "discussion_posts" p
-  JOIN migrated m ON m."content" = p."content" AND m."created_at" = p."created_at"
-  WHERE p."parent_id" IS NULL;
+  WHERE p."parent_id" IS NULL
+  ORDER BY p."id";
+
+  INSERT INTO "page_comments" ("id", "page_id", "author_id", "content", "deleted_at", "deleted_by", "created_at")
+  SELECT parents.comment_id, COALESCE(p."perspective_id", p."term_id"), p."author_id", p."content", p."deleted_at", p."deleted_by", p."created_at"
+  FROM "discussion_posts" p
+  JOIN migration_discussion_parents parents ON parents.source_id = p."id";
 
   INSERT INTO "replies" ("target_type", "target_id", "author_id", "content", "deleted_at", "deleted_by", "created_at")
   SELECT 'page_comment', parents.comment_id, p."author_id", p."content", p."deleted_at", p."deleted_by", p."created_at"

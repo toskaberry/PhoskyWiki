@@ -184,7 +184,7 @@ function formatTime(value: string) {
 
 /** 感想卡片：头像/昵称/正文/赞同/回复（spec 0009 Q5）。 */
 function ThoughtCard({
-  thought, pending, onAgree, onToggleVisibility, onDelete, onReply, onDeleteReply, mobile,
+  thought, pending, onAgree, onToggleVisibility, onDelete, onReply, onStartReply, onDeleteReply, mobile,
 }: {
   thought: ThoughtView;
   pending: boolean;
@@ -192,6 +192,7 @@ function ThoughtCard({
   onToggleVisibility: (thought: ThoughtView) => void;
   onDelete: (thought: ThoughtView) => void;
   onReply: (thought: ThoughtView, content: string) => Promise<boolean>;
+  onStartReply: (thought: ThoughtView) => boolean;
   onDeleteReply: (replyId: number) => void;
   mobile: boolean;
 }) {
@@ -207,7 +208,7 @@ function ThoughtCard({
     if (ok) { setReplyText(""); setReplyOpen(false); }
   }
 
-  return <li className="rounded-lg border border-border p-3">
+  return <li id={`thought-${thought.id}`} tabIndex={-1} className="scroll-mt-20 rounded-lg border border-border p-3 focus:outline-2 focus:outline-primary">
     {thought.deleted ? <p className="text-sm italic text-muted-foreground">该想法已被删除。</p> : <>
       <div className="flex flex-wrap items-center gap-2 text-sm">
         {thought.authorImage
@@ -222,14 +223,15 @@ function ThoughtCard({
         {thought.visibility === "private" && <span className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">仅自己可见</span>}
       </div>
       <p className="mt-2 whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-sm leading-relaxed">{thought.content}</p>
+      <blockquote className="mt-2 border-l-2 border-border pl-3 text-xs text-muted-foreground">引用：{thought.quote}</blockquote>
       {thought.status === "original-changed" && <p className="mt-2 text-xs text-muted-foreground">
-        <span className="font-medium">原文已变化</span>：想法按发表时的引用保存 ——「{thought.quote}」
+        <span className="font-medium">原文已变化</span>：想法按发表时的引用保存
       </p>}
     </>}
     <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
       <span>{thought.agreeCount} 赞同</span>
       {!mobile && !thought.deleted && thought.authorId !== "" && <>
-        {thought.canDelete
+        {thought.canChangeVisibility
           ? <button type="button" aria-label={`设为${thought.visibility === "public" ? "仅自己可见" : "公开"}`} disabled={pending}
               onClick={() => onToggleVisibility(thought)} className="hover:text-foreground">
               {thought.visibility === "public" ? "设为仅自己可见" : "设为公开"}
@@ -240,7 +242,7 @@ function ThoughtCard({
             </button>}
         {thought.canDelete && <button type="button" aria-label="删除想法" disabled={pending}
           onClick={() => onDelete(thought)} className="hover:text-destructive">删除想法</button>}
-        {thought.replyable && <button type="button" aria-label="回复想法" onClick={() => setReplyOpen(open => !open)}
+        {thought.replyable && <button type="button" aria-label="回复想法" onClick={() => { if (onStartReply(thought)) setReplyOpen(open => !open); }}
           className="hover:text-foreground">回复想法</button>}
       </>}
       {mobile && <span>{thought.visibility === "private" ? "仅自己可见" : "公开"}</span>}
@@ -382,6 +384,41 @@ export function PassageAnnotations({
     indexRef.current = indexPassage(root);
   }, [bodyRoot, sentenceMarkers]);
   useEffect(() => { renderAnnotations(marks, thoughts); }, [renderAnnotations, marks, thoughts, html]);
+
+  // 个人记录和登录回跳共用 thought-ID：先定位句子，再打开对应面板。
+  useEffect(() => {
+    const openFromHash = () => {
+      const match = /^#thought-(\d+)$/.exec(window.location.hash);
+      const thought = match ? thoughtsRef.current.find(row => row.id === Number(match[1])) : undefined;
+      if (!thought) return;
+      if (isLocatedThought(thought)) {
+        const sentence = indexRef.current?.sentences.find(row => row.start < thought.end && row.end > thought.start);
+        if (!sentence) return;
+        bodyRoot()?.querySelector<HTMLElement>(`[data-sentence-start="${sentence.start}"]`)
+          ?.scrollIntoView({ block: "center" });
+        setChangedOpen(false);
+        setPanel({ sentence, own: thought.authorId === viewerId });
+      } else {
+        setPanel(null);
+        setChangedOpen(true);
+      }
+    };
+    openFromHash();
+    window.addEventListener("hashchange", openFromHash);
+    return () => window.removeEventListener("hashchange", openFromHash);
+  }, [bodyRoot, viewerId]);
+
+  useEffect(() => {
+    if (!panel && !changedOpen) return;
+    const match = /^#thought-(\d+)$/.exec(window.location.hash);
+    if (!match) return;
+    const frame = requestAnimationFrame(() => {
+      const card = document.getElementById(`thought-${match[1]}`);
+      card?.focus({ preventScroll: true });
+      card?.scrollIntoView({ block: "nearest" });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [panel, changedOpen]);
 
   const toolbarRef = useRef<HTMLDivElement>(null);
 
@@ -633,15 +670,29 @@ export function PassageAnnotations({
     return true;
   }, [pageId]);
 
+  const loginForThought = useCallback((thought: ThoughtView) => {
+    const url = new URL(loginHref, window.location.origin);
+    url.searchParams.set("redirect", `${window.location.pathname}${window.location.search}#thought-${thought.id}`);
+    window.location.href = url.href;
+  }, [loginHref]);
+
+  const startReply = useCallback((thought: ThoughtView) => {
+    if (loggedIn) return true;
+    loginForThought(thought);
+    return false;
+  }, [loggedIn, loginForThought]);
+
   const toggleAgree = useCallback(async (thought: ThoughtView) => {
+    if (!loggedIn) { loginForThought(thought); return; }
     setBusy(true); setPanelError(null);
     try {
       const response = await fetch(`/api/thoughts/${thought.id}/agree`, { method: thought.agreed ? "DELETE" : "POST" });
+      if (response.status === 401) { loginForThought(thought); return; }
       if (!response.ok) { setPanelError(((await response.json().catch(() => null)) as { error?: string } | null)?.error ?? "操作失败，请重试"); return; }
       await refreshThoughts();
     } catch { setPanelError("网络异常，请重试"); }
     finally { setBusy(false); }
-  }, [refreshThoughts]);
+  }, [loggedIn, loginForThought, refreshThoughts]);
 
   const toggleVisibility = useCallback(async (thought: ThoughtView) => {
     setBusy(true); setPanelError(null);
@@ -667,17 +718,19 @@ export function PassageAnnotations({
   }, [refreshThoughts]);
 
   const replyThought = useCallback(async (thought: ThoughtView, content: string) => {
+    if (!loggedIn) { loginForThought(thought); return false; }
     setBusy(true); setPanelError(null);
     try {
       const response = await fetch(`/api/thoughts/${thought.id}/replies`, {
         method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ content }),
       });
+      if (response.status === 401) { loginForThought(thought); return false; }
       if (!response.ok) { setPanelError(((await response.json().catch(() => null)) as { error?: string } | null)?.error ?? "回复失败，请重试"); return false; }
       await refreshThoughts();
       return true;
     } catch { setPanelError("网络异常，请重试"); return false; }
     finally { setBusy(false); }
-  }, [refreshThoughts]);
+  }, [loggedIn, loginForThought, refreshThoughts]);
 
   const removeThoughtReply = useCallback(async (replyId: number) => {
     setBusy(true); setPanelError(null);
@@ -851,7 +904,7 @@ export function PassageAnnotations({
                 : <ul className="flex flex-col gap-3">
                     {list.map(thought => <ThoughtCard key={thought.id} thought={thought} pending={busy}
                       onAgree={toggleAgree} onToggleVisibility={toggleVisibility} onDelete={removeThought}
-                      onReply={replyThought} onDeleteReply={removeThoughtReply} mobile={!isDesktop} />)}
+                      onReply={replyThought} onStartReply={startReply} onDeleteReply={removeThoughtReply} mobile={!isDesktop} />)}
                   </ul>;
             })()}
             {changedOpen && <ul className="mt-4 flex flex-col gap-2 border-t border-border pt-3 text-sm">
