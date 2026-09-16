@@ -183,16 +183,41 @@ export async function deployRelease(config, receipt, request, credentials) {
   return record;
 }
 
+// Only fixed, reviewed codes may cross the host boundary. Never serialize an
+// arbitrary Error, subprocess stderr, request, configuration, or token.
+export function releaseRefusal(error, phase) {
+  const allowed = new Set([
+    'PROTECTED_CONFIG_REQUIRED', 'REQUEST_TOO_LARGE', 'TEMPORARY_GITHUB_TOKEN_REQUIRED',
+    'RELEASE_INPUT_INVALID', 'RELEASE_JOBS_OVERFLOW', 'RELEASE_EVIDENCE_FETCH_FAILED',
+    'RELEASE_ARTIFACT_UNAVAILABLE', 'RELEASE_TARGET_OR_INPUT_INVALID',
+    'RELEASE_NOT_QUALIFIED:EVIDENCE_MISMATCH', 'RELEASE_NOT_QUALIFIED:REPOSITORY_MISMATCH',
+    'RELEASE_NOT_QUALIFIED:RUN_MISMATCH', 'RELEASE_NOT_QUALIFIED:JOBS_MISMATCH',
+    'RELEASE_NOT_QUALIFIED:RECEIPT_MISMATCH',
+  ]);
+  const code = error?.message?.startsWith('RELEASE_LOCKED:') ? 'RELEASE_LOCKED'
+    : allowed.has(error?.message) ? error.message : 'RELEASE_FAILED';
+  return { result: 'refused', phase, error: code, migration: phase === 'deployment' ? 'unknown' : 'not-started' };
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+  let phase = 'configuration';
   try {
     const config = await privateJSON(process.argv[2] || '/etc/phoskywiki/release.json');
+    phase = 'request';
     let input = '';
     for await (const chunk of process.stdin) { input += chunk; if (input.length > 4096) fail('REQUEST_TOO_LARGE'); }
     const { githubToken, registryUser, ...request } = JSON.parse(input);
     if (typeof githubToken !== 'string' || githubToken.length < 20 || githubToken.length > 1024) fail('TEMPORARY_GITHUB_TOKEN_REQUIRED');
+    phase = 'qualification';
     const receipt = await fetchQualifiedRelease(config.repository, request.runId, request.sha, githubToken);
+    phase = 'deployment';
     const record = await deployRelease(config, receipt, request, { token: githubToken, user: registryUser });
     console.log(JSON.stringify(record));
     if (record.result !== 'succeeded') process.exitCode = 1;
-  } catch { console.error('RELEASE_REFUSED: inspect protected host records and exact CI run'); process.exitCode = 1; }
+  } catch (error) {
+    const refusal = releaseRefusal(error, phase);
+    console.log(JSON.stringify(refusal));
+    console.error(`RELEASE_REFUSED: ${refusal.error} (${phase}); inspect protected host records and exact CI run`);
+    process.exitCode = 1;
+  }
 }

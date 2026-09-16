@@ -15,6 +15,13 @@ test('a successful exact main commit qualifies its tested immutable image', () =
   assert.equal(qualifyRelease(evidence()).image, image);
 });
 
+test('repository rename drift is actionable and still refuses the release', () => {
+  const input = evidence();
+  input.run.repository.full_name = 'toskaberry/PhoskyWiki';
+  input.run.head_repository.full_name = 'toskaberry/PhoskyWiki';
+  assert.throws(() => qualifyRelease(input), /RELEASE_NOT_QUALIFIED:REPOSITORY_MISMATCH/);
+});
+
 for (const [name, change] of [
   ['another commit', e => { e.run.head_sha = 'd'.repeat(40); }],
   ['a PR run', e => { e.run.event = 'pull_request'; }],
