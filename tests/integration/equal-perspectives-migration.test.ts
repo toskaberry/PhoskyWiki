@@ -82,7 +82,7 @@ it("迁移彻底清除编委会、其历史和旧默认正文提案，保留具�
     { source_page_id: 5, target_page_id: 3, target_name: "异化" },
     { source_page_id: 5, target_page_id: null, target_name: "异化@编委会" },
   ]);
-  expect((await pool.query("SELECT perspective_id, content FROM discussion_posts")).rows).toEqual([{ perspective_id: null, content: "应保留的词条讨论" }]);
+  expect((await pool.query("SELECT page_id, content FROM page_comments")).rows).toEqual([{ page_id: 3, content: "应保留的词条讨论" }]);
   expect((await pool.query("SELECT interpreter_id FROM interest_tags")).rows).toEqual([{ interpreter_id: 2 }]);
   expect((await pool.query("SELECT degraded, last_reindex_result FROM search_maintenance")).rows).toEqual([{ degraded: true, last_reindex_result: "required" }]);
   expect((await pool.query("SELECT column_name FROM information_schema.columns WHERE table_schema='public' AND column_name IN ('is_editorial_board', 'pinned_at')")).rows).toEqual([]);

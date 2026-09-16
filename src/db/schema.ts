@@ -520,49 +520,8 @@ export const interestTags = pgTable(
 );
 
 // ---------------------------------------------------------------------------
-// 讨论区（T13）：词条级楼层 + 一层嵌套回复 + 视角锚点 + 版务。
-// spec「discussion threads/posts（词条级挂载，视角锚点可选）」：
-//   - 讨论挂在词条上，不挂 pages 壳——楼层不是页面（无修订/提交/软删除页面语义），
-//     ADR-0003 的「讨论挂载以页面为锚点」落在 term_id 外键上；
-//   - 一层嵌套：parentId 只指向同词条的顶层楼层（父自身必须是楼层），「回复的回复」
-//     由应用层拒绝——CHECK 表达不了「父的父必须为空」，见 lib/discussion.ts；
-//   - 版务：楼层软删（deletedAt/deletedBy，内容与作者保留）、讨论区锁定
-//     （termDiscussions，行不存在 = 开放）。
+// 版务锁定与页面评论
 // ---------------------------------------------------------------------------
-
-/** 讨论楼层：词条讨论区的发言单元（顶层楼层，或对楼层的回复）。 */
-export const discussionPosts = pgTable(
-  "discussion_posts",
-  {
-    id: serial("id").primaryKey(),
-    // 强类型边界：term_id 只指向 terms 负载表，把讨论挂到视角/诠释者/学派被外键拒绝
-    termId: integer("term_id")
-      .notNull()
-      .references(() => terms.pageId, { onDelete: "cascade" }),
-    // 视角锚点（可选）：视角页「就这个视角发起讨论」开出的楼层带上，渲染时可点击
-    // 跳回该视角。视角页被物理删除时置空（软删除则保留，锚点链接只对在线视角渲染）
-    perspectiveId: integer("perspective_id").references(() => perspectives.pageId, {
-      onDelete: "set null",
-    }),
-    // 一层嵌套回复的父楼层；null = 顶层楼层
-    parentId: integer("parent_id").references((): AnyPgColumn => discussionPosts.id),
-    // 纯文本发言（不做 Markdown：页面内容经两票审核后发布，楼层即时可见，
-    // 渲染保持纯文本转义 + 换行保留，把富格式留给受审内容）
-    content: text("content").notNull(),
-    deletedAt: timestamp("deleted_at", { withTimezone: true }),
-    deletedBy: text("deleted_by").references(() => user.id),
-    authorId: text("author_id")
-      .notNull()
-      .references(() => user.id),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
-  },
-  (t) => [
-    index("discussion_posts_term_idx").on(t.termId, t.id),
-    index("discussion_posts_parent_idx").on(t.parentId),
-  ],
-);
 
 /** 词条的版务锁定状态：一行 = 一个词条（锁定时懒创建，缺席即开放；发言不建行）。 */
 export const termDiscussions = pgTable("term_discussions", {
