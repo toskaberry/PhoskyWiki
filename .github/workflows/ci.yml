@@ -125,14 +125,14 @@ jobs:
         run: |
           docker save phosky-ci:test -o /tmp/application.tar
           printf '%s' "$TEST_APP_IMAGE" > /tmp/image-id.txt
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: tested-image-${{ github.run_attempt }}
           path: |
             /tmp/application.tar
             /tmp/image-id.txt
           retention-days: 3
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: browser-evidence-${{ github.run_attempt }}
@@ -176,7 +176,7 @@ jobs:
           test "$(docker image inspect "$IMAGE" --format '{{.Id}}')" = "$IMAGE_ID"
           jq -n --arg sha "$REVISION" --arg runId "$GITHUB_RUN_ID" --argjson attempt "$GITHUB_RUN_ATTEMPT" --arg image "$IMAGE" --arg imageId "$IMAGE_ID" '{sha:$sha,runId:$runId,attempt:$attempt,image:$image,imageId:$imageId}' > release.json
           docker logout ghcr.io
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: release-${{ github.run_attempt }}
           path: release.json

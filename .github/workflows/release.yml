@@ -63,7 +63,7 @@ jobs:
           [[ "$SSH_TARGET" =~ ^[a-z_][a-z0-9_-]*@[a-zA-Z0-9.-]+$ ]]
           jq -n --arg runId "$RUN_ID" --arg sha "$SHA" --arg notice "$NOTICE" '{runId:$runId,sha:$sha,notice:$notice,environment:"production",githubToken:env.GH_TOKEN,registryUser:env.ACTOR}' |
             ssh -T -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -o IdentitiesOnly=yes -o "UserKnownHostsFile=$RUNNER_TEMP/release-hosts" -i "$RUNNER_TEMP/release-key" "$SSH_TARGET" | tee release-result.json
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: release-result-${{ github.run_id }}
