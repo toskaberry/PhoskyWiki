@@ -5,7 +5,7 @@ import { expect, test as base, type APIRequestContext, type Page } from "./fixtu
 import { cleanupTestContent } from "./content-cleanup";
 import { fixtureRegister } from "./auth-fixture";
 import { getDb } from "../../src/db";
-import { user } from "../../src/db/schema";
+import { submissions, user } from "../../src/db/schema";
 
 type Target = { pageId: number; href: string; submissionId: number };
 type PreviewFixture = { term: Target; empty: Target; interpreters: Target[]; perspectives: Target[]; source: Target; title: string; names: string[]; content: string };
@@ -104,9 +104,24 @@ test("蓝色正文链接保留强调，小浮卡显示词条简介与两个视�
   await page.locator("html").evaluate(el => el.classList.add("dark"));
   await assertBlue();
   await page.setViewportSize({ width: 375, height: 450 });
+  // Establish keyboard modality; Safari may skip anchors in its native Tab order.
+  await page.keyboard.press("Tab");
   await link.focus();
+  await expect(link).toBeFocused();
   await expect(card(page)).toContainText("词条简介");
   await compactCard(page);
+  const linkBox = await link.boundingBox();
+  const cardBox = await card(page).boundingBox();
+  expect(cardBox!.y + cardBox!.height <= linkBox!.y || cardBox!.y >= linkBox!.y + linkBox!.height).toBe(true);
+  await expect(card(page).getByRole("link", { name: /查看全部/ })).toBeInViewport();
+  await page.evaluate(() => window.scrollBy(0, window.innerHeight));
+  await expect(link).not.toBeInViewport();
+  await expect(card(page)).toBeHidden();
+  await link.hover();
+  await expect(card(page)).toContainText("词条简介");
+  await compactCard(page);
+  await link.click();
+  await expect(page).toHaveURL(new RegExp(`${sample.term.pageId}$`));
 });
 
 test("键盘访问具名视角与浮卡链接，离开关闭，空简介保持可读", async ({ page, sample }) => {
@@ -118,6 +133,12 @@ test("键盘访问具名视角与浮卡链接，离开关闭，空简介保持�
   await expect(card(page)).not.toContainText("**");
   await page.keyboard.press("Tab");
   await expect(card(page).getByRole("link").first()).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(bodyLink(page, "空词条")).toBeFocused();
+  await expect(card(page)).toContainText("暂无简介");
+  await bodyLink(page, "具名视角").focus();
+  await expect(card(page)).toContainText(sample.names[0]);
+  await page.keyboard.press("Tab");
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(new RegExp(`${sample.perspectives[0].pageId}$`));
   await page.goto(sample.source.href);
@@ -176,7 +197,13 @@ test("公开预览接口限制摘录，不泄露提案或不可见目标，并�
         }
       } finally { expect((await request.post(`/api/admin/pages/${hidden.pageId}`, { data: { action: "restore" } })).ok()).toBe(true); }
     }
-  } finally { await getDb().delete(user).where(eq(user.email, email)); }
+  } finally {
+    const [account] = await getDb().select({ id: user.id }).from(user).where(eq(user.email, email));
+    if (account) {
+      await getDb().delete(submissions).where(eq(submissions.submittedBy, account.id));
+      await getDb().delete(user).where(eq(user.id, account.id));
+    }
+  }
 });
 
 test("加载失败及空正文不阻断跳转，迟到响应不重开旧卡片", async ({ page, sample }) => {
@@ -269,7 +296,7 @@ test("审核提案预览的双链展示当前公开简介", async ({ page, reque
     expect((await fixtureRegister(page.request, { data: { name: "提案预览编者", email, password: "preview-password-123" } })).ok()).toBe(true);
     const history = await (await request.get(`/api/pages/${sample.source.pageId}/history`)).json();
     const proposal = await submit(page.request, { kind: "edit", pageId: sample.source.pageId, baseRevisionId: history.revisions[0].id, content: `${sample.content}\n\n提案附加内容` });
-    await login(page.request);
+    await page.context().addCookies((await request.storageState()).cookies);
     await page.goto("/review");
     const item = page.locator(`[data-submission-id="${proposal.submissionId}"]`);
     await item.locator("summary").click();
@@ -277,5 +304,11 @@ test("审核提案预览的双链展示当前公开简介", async ({ page, reque
     await preview.getByRole("link", { name: "普通双链", exact: true }).hover();
     await expect(card(page)).toContainText("词条简介");
     await compactCard(page);
-  } finally { await getDb().delete(user).where(eq(user.email, email)); }
+  } finally {
+    const [account] = await getDb().select({ id: user.id }).from(user).where(eq(user.email, email));
+    if (account) {
+      await getDb().delete(submissions).where(eq(submissions.submittedBy, account.id));
+      await getDb().delete(user).where(eq(user.id, account.id));
+    }
+  }
 });
