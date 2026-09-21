@@ -135,6 +135,9 @@
     font-family: var(--font-ui);
     overflow-wrap: anywhere;
   }
+  :where(#main-content, #main-content [id]) {
+    scroll-margin-top: 5rem;
+  }
   a {
     color: var(--primary);
     text-underline-offset: 0.2em;

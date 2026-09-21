@@ -1,3 +1,4 @@
+import { openAccountMenu } from "./navigation-fixture";
 import { fixtureRegister } from "./auth-fixture";
 import "dotenv/config";
 import { randomUUID } from "node:crypto";
@@ -90,7 +91,7 @@ test("历史选择任意修订并高亮行内差异，回滚更新正文，删�
     await expect(reader.getByRole("heading", { name: "404", exact: true })).toBeVisible();
     await reader.goto(term.href);
     await expect(reader.getByRole("link", { name: /历史诠释者.*论历史词条/ })).toHaveCount(0);
-    await page.getByRole("banner").getByRole("link", { name: "已删除页面", exact: true }).click();
+    await (await openAccountMenu(page)).getByRole("link", { name: "已删除页面", exact: true }).click();
     await page.getByRole("link", { name: new RegExp(suffix) }).click();
     await expect(page.getByTestId("history-revision")).toHaveCount(4);
     await page.getByRole("button", { name: "恢复页面", exact: true }).click();

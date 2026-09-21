@@ -1,11 +1,16 @@
+import { toggleTheme } from "./navigation-fixture";
 import { expect, test, type Page } from "./fixtures";
 import { randomUUID } from "node:crypto";
 import { invitationFixture } from "../auth-fixture";
 
 async function expectTheme(page: Page, theme: "light" | "dark") {
+  const mobile = page.getByRole("button", { name: "打开导航", exact: true });
+  const isMobile = await mobile.isVisible();
+  if (isMobile) await mobile.click();
   await expect(page.getByRole("button", { name: "深色主题", exact: true }))
     .toHaveAttribute("aria-pressed", String(theme === "dark"));
   await expect(page.locator("html")).toHaveCSS("color-scheme", theme);
+  if (isMobile) await page.getByRole("button", { name: "关闭导航", exact: true }).click();
 }
 
 test("编辑器在明暗主题下保留可读的引用、代码与文献链接，以及原文强调", async ({ page }, testInfo) => {
@@ -25,7 +30,7 @@ test("编辑器在明暗主题下保留可读的引用、代码与文献链接�
   await expect(preview.getByRole("link", { name: "文献" })).toHaveCSS("text-decoration-line", "underline");
 
   for (const theme of ["light", "dark"] as const) {
-    if (theme === "dark") await page.getByRole("button", { name: "深色主题", exact: true }).click();
+    if (theme === "dark") await toggleTheme(page);
     await expectTheme(page, theme);
     await expect(editor).toHaveText(source, { useInnerText: true });
     // Check visible syntax against its painted background, not generated token class names.
@@ -111,12 +116,12 @@ for (const failure of ["读取被拒绝", "写入被拒绝"] as const) {
     }, failure);
     await page.goto("/");
     await expectTheme(page, "light");
-    await page.getByRole("button", { name: "深色主题", exact: true }).click();
+    await toggleTheme(page);
     await expectTheme(page, "dark");
     await page.getByRole("link", { name: "主体性", exact: true }).click();
     await expect(page.getByRole("heading", { level: 1, name: "主体性" })).toBeVisible();
     await expectTheme(page, "dark");
-    await page.getByRole("button", { name: "深色主题", exact: true }).click();
+    await toggleTheme(page);
     await expectTheme(page, "light");
     expect(errors).toEqual([]);
   });
@@ -124,7 +129,7 @@ for (const failure of ["读取被拒绝", "写入被拒绝"] as const) {
 
 test("即使客户端脚本尚未加载，刷新也先呈现已选择的深色主题", async ({ page }) => {
   await page.goto("/");
-  await page.getByRole("button", { name: "深色主题", exact: true }).click();
+  await toggleTheme(page);
   await expectTheme(page, "dark");
   // Hold back hydration: the saved appearance must be restored by the document itself.
   await page.route(/\/_next\/.*\.js(?:\?|$)/, route => route.abort());
@@ -172,7 +177,7 @@ for (const width of [1440, 375]) {
     const perspectiveHref = await page.getByRole("link", { name: "拉康论主体性", exact: true }).getAttribute("href");
 
     for (const theme of ["light", "dark"] as const) {
-      if (theme === "dark") await page.getByRole("button", { name: "深色主题", exact: true }).click();
+      if (theme === "dark") await toggleTheme(page);
       for (const [name, href] of [["home", "/"], ["term", termHref!], ["perspective", perspectiveHref!], ["graph", "/graph"], ["form", "/login"]]) {
         await page.goto(href);
         await expectTheme(page, theme);

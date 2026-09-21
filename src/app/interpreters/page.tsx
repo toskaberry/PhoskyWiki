@@ -1,3 +1,4 @@
+import { PageContainer } from "@/components/page-container";
 import Link from "next/link";
 
 import { listInterpreters } from "@/lib/content";
@@ -9,7 +10,7 @@ export const metadata = { title: "诠释者索引" };
 export default async function InterpretersPage() {
   const interpreters = await listInterpreters();
   return (
-    <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-10">
+    <PageContainer className="py-10">
       <h1 className="text-3xl font-bold tracking-tight">诠释者索引</h1>
       <p className="mt-3 text-muted-foreground">沿着一位思想家的问题意识，阅读彼此关联的概念。</p>
       <ul className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -21,6 +22,6 @@ export default async function InterpretersPage() {
         ))}
       </ul>
       {interpreters.length === 0 && <p className="mt-8 text-muted-foreground">还没有诠释者，欢迎参与共建。</p>}
-    </main>
+    </PageContainer>
   );
 }

@@ -1,3 +1,4 @@
+import { openAccountMenu } from "./navigation-fixture";
 // 认证关键路径（T05 验收）：注册 → 登出 → 再登录，会话持久；游客浏览不受限。
 // 走真实浏览器与真实 /api/auth/* 端点；每个用例用独立邮箱，可并行/重复执行。
 
@@ -38,7 +39,7 @@ test.describe("编者账号全流程", () => {
     await expect(banner).toContainText(name);
 
     // 登出
-    await page.getByRole("button", { name: "登出" }).click();
+    await (await openAccountMenu(page)).getByRole("button", { name: "登出" }).click();
     await expect(banner).toContainText("登录");
     await expect(banner).not.toContainText(name);
 

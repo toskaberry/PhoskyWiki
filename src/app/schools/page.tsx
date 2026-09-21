@@ -1,3 +1,4 @@
+import { PageContainer } from "@/components/page-container";
 import type { Metadata } from "next";
 import Link from "next/link";
 
@@ -12,7 +13,7 @@ export default async function SchoolsPage() {
   const schools = await listSchools();
 
   return (
-    <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8">
+    <PageContainer>
       <h1 className="text-3xl font-bold tracking-tight">学派</h1>
       <p className="mt-3 max-w-2xl leading-relaxed text-muted-foreground">
         学派是诠释者的分组导航实体：它只组织人，不组织词条——学派的核心词条由成员的视角聚合而来。
@@ -50,6 +51,6 @@ export default async function SchoolsPage() {
           </p>
         )}
       </section>
-    </main>
+    </PageContainer>
   );
 }

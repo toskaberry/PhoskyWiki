@@ -5,6 +5,7 @@ import "@fontsource-variable/noto-serif-sc/wght.css";
 import "./globals.css";
 
 import { SiteHeader } from "@/components/site-header";
+import { SiteFooter } from "@/components/site-footer";
 import { themeInitScript } from "@/lib/theme";
 
 export const metadata: Metadata = {
@@ -23,11 +24,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
       <body className="flex min-h-full flex-col bg-background text-foreground">
+        <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-4 focus:z-50 focus:rounded focus:bg-background focus:px-4 focus:py-3">跳到主要内容</a>
         <SiteHeader />
-        <div className="flex flex-1 flex-col">{children}</div>
-        <footer className="border-t border-border py-6 text-center text-sm text-muted-foreground">
-          PhoskyWiki · 词条 × 视角的原子笔记 WIKI
-        </footer>
+        <div id="main-content" tabIndex={-1} className="flex min-w-0 flex-1 flex-col">{children}</div>
+        <SiteFooter />
       </body>
     </html>
   );

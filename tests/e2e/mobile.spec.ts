@@ -6,6 +6,7 @@ test.use({ viewport: { width: 375, height: 812 }, isMobile: true, hasTouch: true
 
 async function expectFits(page: Page) {
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
+  await page.getByRole("button", { name: "打开导航", exact: true }).tap();
   for (const name of ["词条", "诠释者", "学派"]) {
     const link = page.getByRole("navigation", { name: "主导航", exact: true }).getByRole("link", { name, exact: true });
     await expect(link).toBeVisible();
@@ -13,9 +14,10 @@ async function expectFits(page: Page) {
     expect(bounds!.x).toBeGreaterThanOrEqual(0);
     expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(375);
   }
+  await page.getByRole("button", { name: "关闭导航", exact: true }).tap();
 }
 
-test("375px：搜索提交、词条阅读、图谱定位与评论区发言可用", async ({ page }) => {
+test("375px：搜索提交、词条阅读、图谱定位可用，评论区保持只读", async ({ page }) => {
   await page.goto("/");
   await expectFits(page);
   const search = page.getByRole("main").getByRole("textbox", { name: "全站搜索" });

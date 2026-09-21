@@ -1,3 +1,4 @@
+import { openAccountMenu } from "./navigation-fixture";
 import "dotenv/config";
 import { randomUUID } from "node:crypto";
 import { expect, test } from "./fixtures";
@@ -56,7 +57,7 @@ test("管理员签发邀请、编者注册与双人受理，恢复密码使旧�
     const next = second.locator("[data-submission-id]").filter({ hasText: title });
     await next.getByRole("button", { name: "受理", exact: true }).click();
     await expect(next).toHaveCount(0);
-    await page.getByRole("button", { name: "登出" }).click();
+    await (await openAccountMenu(page)).getByRole("button", { name: "登出" }).click();
     await page.goto("/terms");
     await page.getByRole("link", { name: title, exact: true }).click();
     await expect(page.getByText("两名管理员受理后可见的词条简介。")).toBeVisible();

@@ -1,3 +1,4 @@
+import { openAccountMenu } from "./navigation-fixture";
 import { fixtureRegister } from "./auth-fixture";
 // T09：个人主页的提交历史、审核通知与私有差异，走真实 HTTP + SSR/浏览器主缝。
 // 每个用例创建独立编者和新页面，不依赖既有提交，也不改变种子内容。
@@ -55,7 +56,8 @@ test("个人主页只显示自己的提交，新词条差异含标题与简介�
 
   await page.goto("/profile");
   await expect(page.getByRole("heading", { level: 1, name: "个人主页" })).toBeVisible();
-  await expect(page.getByRole("banner").getByRole("link", { name: new RegExp(author.name) }))
+  await expect(page.getByTestId("session-user")).toContainText(author.name);
+  await expect((await openAccountMenu(page)).getByRole("link", { name: "个人主页", exact: true }))
     .toHaveAttribute("href", "/profile");
 
   const item = page.locator(`[data-submission-id="${created.submissionId}"]`);
@@ -118,7 +120,7 @@ test("受理与驳回通知保留理由原文，未读数与已读状态持久�
   expect(rejectResponse.ok()).toBe(true);
 
   // 审核来自另一个会话；普通站内导航也应更新页头，不能依赖整页刷新。
-  await banner.getByTestId("session-user").click();
+  await (await openAccountMenu(page)).getByRole("link", { name: "个人主页", exact: true }).click();
   await expect(page.getByRole("heading", { level: 1, name: "个人主页", exact: true })).toBeVisible();
   await expect(banner.getByRole("link", { name: "通知（2 条未读）", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { level: 2, name: "通知", exact: true })).toBeVisible();

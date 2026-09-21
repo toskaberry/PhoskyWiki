@@ -17,6 +17,7 @@ export function LogoutButton() {
       type="button"
       variant="ghost"
       size="sm"
+      className="min-h-11"
       disabled={pending}
       onClick={() =>
         startTransition(async () => {

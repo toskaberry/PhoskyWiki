@@ -31,7 +31,8 @@ test("学派轴：学派列表 → 学派页（成员诠释者 + 核心词条）
 
 test("分类轴：分类树浏览 → 分类页词条列表；词条页显示所属分类并可点入", async ({ page }) => {
   await page.goto("/");
-  await page.getByRole("link", { name: "分类", exact: true }).click();
+  await page.getByRole("button", { name: "更多导航", exact: true }).click();
+  await page.getByRole("dialog", { name: "更多导航", exact: true }).getByRole("link", { name: "分类", exact: true }).click();
   await expect(page.getByRole("heading", { level: 1, name: "分类" })).toBeVisible();
 
   // 树上子分类可点入
