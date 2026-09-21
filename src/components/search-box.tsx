@@ -49,7 +49,8 @@ export function SearchBox({
         const data = (await res.json()) as { suggestions: Suggestion[] };
         setSuggestions(data.suggestions);
         setActiveIndex(-1);
-        setOpen(data.suggestions.length > 0);
+        // Results may arrive after a facet click or Escape. Only user input/focus
+        // opens the list; a late response must not reopen it over search results.
       } catch {
         // 过期请求被 abort 或网络失败：维持现状即可
       }
@@ -111,9 +112,14 @@ export function SearchBox({
           name="q"
           value={query}
           autoFocus={autoFocus}
-          onChange={(event) => setQuery(event.target.value)}
+          onChange={(event) => {
+            setQuery(event.target.value);
+            setSuggestions([]);
+            setActiveIndex(-1);
+            setOpen(true);
+          }}
           onKeyDown={onKeyDown}
-          onFocus={() => suggestions.length > 0 && setOpen(true)}
+          onFocus={() => setOpen(true)}
           placeholder="搜索词条 / 诠释者 / 视角…"
           aria-label="全站搜索"
           data-testid="search-input"
@@ -142,7 +148,7 @@ export function SearchBox({
                   index === activeIndex ? "bg-muted" : ""
                 }`}
               >
-                <span className="min-w-0 truncate">{suggestion.title}</span>
+                <span className="min-w-0 break-words">{suggestion.title}</span>
                 <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
                   {SEARCH_TYPE_LABELS[suggestion.type]}
                 </span>

@@ -1,3 +1,5 @@
+import { PageContainer } from "@/components/page-container";
+import { DiscoveryHeader, DiscoveryEmpty } from "@/components/discovery";
 import type { Metadata } from "next";
 import Link from "next/link";
 
@@ -11,18 +13,18 @@ export const metadata: Metadata = { title: "分类 · PhoskyWiki" };
 
 function CategoryTreeNodeItem({ node }: { node: CategoryTreeNode }) {
   return (
-    <li>
+    <li className="min-w-0 py-3">
       <Link
         href={categoryPath(node.slug)}
-        className="font-medium underline-offset-4 hover:underline"
+        className="min-w-0 break-words text-lg font-medium text-primary underline-offset-4 hover:underline"
       >
         {node.name}
       </Link>
-      <span className="ml-2 text-xs text-muted-foreground">
+      <span className="mt-1 block text-xs text-muted-foreground">
         {node.termCount} 个词条
       </span>
       {node.children.length > 0 && (
-        <ul className="mt-2 ml-4 space-y-2 border-l border-border pl-4">
+        <ul className="mt-3 ml-2 divide-y divide-border border-l border-border pl-3 sm:ml-4 sm:pl-4">
           {node.children.map((child) => (
             <CategoryTreeNodeItem key={child.id} node={child} />
           ))}
@@ -41,29 +43,25 @@ export default async function CategoriesPage() {
   const total = countNodes(tree);
 
   return (
-    <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8">
-      <h1 className="text-3xl font-bold tracking-tight">分类</h1>
-      <p className="mt-3 max-w-2xl leading-relaxed text-muted-foreground">
-        弱类型标签树，只用于组织词条的知识主题——一个词条可同时挂在多个分类下；
-        与学派不同，分类不组织诠释者。
-      </p>
+    <PageContainer>
+      <DiscoveryHeader label="知识主题 / 分类" title="分类">
+        <p>分类按知识主题组织词条，一个词条可同时出现在多个分类下。学派则组织诠释者。</p>
+      </DiscoveryHeader>
 
       <section aria-labelledby="tree-heading" className="mt-10">
         <h2 id="tree-heading" className="mb-6 text-xl font-semibold">
           分类树（{total}）
         </h2>
         {tree.length > 0 ? (
-          <ul className="space-y-3 rounded-lg border border-border bg-card p-5">
+          <ul className="divide-y divide-border border-y border-border">
             {tree.map((root) => (
               <CategoryTreeNodeItem key={root.id} node={root} />
             ))}
           </ul>
         ) : (
-          <p className="text-sm text-muted-foreground">
-            暂无分类。本地开发可运行 <code>pnpm db:seed</code> 灌入演示内容。
-          </p>
+          <DiscoveryEmpty href="/terms" label="浏览词条索引">暂无分类。</DiscoveryEmpty>
         )}
       </section>
-    </main>
+    </PageContainer>
   );
 }
