@@ -95,7 +95,7 @@ export function renderMarkdown(
 export function renderMarkdownTree(
   source: string,
   resolveWikiLink: ResolveWikiLink,
-): Node {
+) {
   const processor = markdownProcessor(resolveWikiLink);
   return processor.runSync(processor.parse(source));
 }
