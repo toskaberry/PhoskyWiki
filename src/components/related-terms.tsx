@@ -13,10 +13,10 @@ export function RelatedTermsPanel({ items }: { items: RelatedTerm[] }) {
       <h2 id="related-terms-heading" className="text-xl font-semibold">
         相关词条
       </h2>
-      <ul data-testid="related-terms" className="mt-4 grid gap-3 sm:grid-cols-2">
+      <ul data-testid="related-terms" className="mt-4 grid border-t border-border sm:grid-cols-2 sm:gap-x-8">
         {items.map((term) => (
-          <li key={term.id} className="rounded-lg border border-border bg-card p-4">
-            <Link href={term.href} className="font-medium hover:underline">
+          <li key={term.id} className="min-w-0 border-b border-border py-4">
+            <Link href={term.href} className="break-words font-medium hover:underline">
               {term.title}
             </Link>
             <p className="mt-1.5 text-xs text-muted-foreground">
