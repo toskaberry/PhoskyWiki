@@ -135,7 +135,7 @@ test("即使客户端脚本尚未加载，刷新也先呈现已选择的深色�
   await page.route(/\/_next\/.*\.js(?:\?|$)/, route => route.abort());
   await page.reload({ waitUntil: "domcontentloaded" });
   await expect(page.locator("html")).toHaveCSS("color-scheme", "dark");
-  await expect(page.getByRole("heading", { level: 1, name: "PhoskyWiki" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: /思想，\s*在分歧中展开。/ })).toBeVisible();
 });
 
 test("中文界面与阅读正文加载本站的黑体、宋体，字体失败时仍可阅读和导航", async ({ page, context }) => {

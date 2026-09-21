@@ -13,7 +13,7 @@ test.describe("游客（未登录）", () => {
     const banner = page.getByRole("banner");
     await expect(banner).toContainText("登录");
     await expect(banner).toContainText("注册");
-    await expect(page.getByRole("heading", { level: 1, name: "PhoskyWiki" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: /思想，\s*在分歧中展开。/ })).toBeVisible();
   });
 });
 

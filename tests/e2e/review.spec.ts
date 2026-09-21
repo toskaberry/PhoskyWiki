@@ -39,7 +39,7 @@ async function login(page: Page, email: string, password: string): Promise<void>
   await page.getByLabel("邮箱").fill(email);
   await page.getByLabel("密码").fill(password);
   await page.getByRole("button", { name: "登录" }).click();
-  await expect(page.getByRole("heading", { level: 1, name: "PhoskyWiki" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: /思想，\s*在分歧中展开。/ })).toBeVisible();
 }
 
 test("编者提交 → 管理员受理 → 游客可见新内容", async ({ page }) => {

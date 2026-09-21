@@ -106,7 +106,7 @@ test("受理与驳回通知保留理由原文，未读数与已读状态持久�
   await expect(banner.getByRole("link", { name: "通知", exact: true })).toBeVisible();
   await expect(page.locator("[data-notification-id]")).toHaveCount(0);
   await banner.getByRole("link", { name: "PhoskyWiki", exact: true }).click();
-  await expect(page.getByRole("heading", { level: 1, name: "PhoskyWiki", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: /思想，\s*在分歧中展开。/, exact: true })).toBeVisible();
 
   const approveResponse = await request.post(`/api/admin/submissions/${approved.submissionId}/review`, {
     data: { action: "approve" },
