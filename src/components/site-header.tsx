@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { LogoutButton } from "@/components/logout-button";
 import { NotificationLink } from "@/components/notification-link";
 import { SearchBox } from "@/components/search-box";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { getUnreadNotificationCount } from "@/lib/notifications";
 import { getSessionUser } from "@/lib/session";
 
@@ -44,6 +45,7 @@ export async function SiteHeader() {
           <SearchBox />
         </div>
         <div className="ml-auto flex min-w-0 flex-wrap items-center gap-2 text-sm">
+          <ThemeToggle />
           {user ? (
             <>
               <ButtonLikeLink href="/new/term">创建词条</ButtonLikeLink>

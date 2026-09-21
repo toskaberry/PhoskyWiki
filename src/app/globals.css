@@ -9,9 +9,10 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
-  --font-mono: var(--font-mono);
-  --font-heading: var(--font-sans);
+  --font-sans: var(--font-ui);
+  --font-serif: var(--font-reading);
+  --font-mono: var(--font-code);
+  --font-heading: var(--font-ui);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -51,94 +52,197 @@
 }
 
 :root {
-  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "PingFang SC",
-    "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono",
-    monospace;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  color-scheme: light;
+  --font-ui: "Noto Sans SC Variable", "Noto Sans CJK SC", "Source Han Sans SC",
+    "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
+  --font-reading: "Noto Serif SC Variable", "Noto Serif CJK SC", "Source Han Serif SC",
+    "Songti SC", "STSong", "SimSun", serif;
+  --font-code: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  --background: #f2f0e9;
+  --foreground: #191919;
+  --card: #f8f6ef;
+  --card-foreground: var(--foreground);
+  --popover: #f8f6ef;
+  --popover-foreground: var(--foreground);
+  --primary: #2548e5;
+  --primary-foreground: #ffffff;
+  --secondary: #e5e1d7;
+  --secondary-foreground: var(--foreground);
+  --muted: #e9e6de;
+  --muted-foreground: #65615a;
+  --accent: #e1e6fc;
+  --accent-foreground: #1936b3;
+  --destructive: #b4232e;
+  --border: #c9c5bc;
+  /* Input boundaries need more contrast than decorative rules. */
+  --input: #8b877e;
+  --ring: var(--primary);
+  --selection: #d5ddff;
+  --selection-foreground: #191919;
+  --chart-1: #2548e5;
+  --chart-2: #65615a;
+  --chart-3: #7461a9;
+  --chart-4: #8a541c;
+  --chart-5: #28736a;
+  --radius: 0.25rem;
+  --sidebar: var(--card);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: var(--accent);
+  --sidebar-accent-foreground: var(--accent-foreground);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--ring);
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  color-scheme: dark;
+  --background: #191b1d;
+  --foreground: #eeece4;
+  --card: #222629;
+  --popover: #24282c;
+  --primary: #9badff;
+  --primary-foreground: #191b1d;
+  --secondary: #2b3035;
+  --muted: #292d31;
+  --muted-foreground: #b7b4ac;
+  --accent: #303953;
+  --accent-foreground: #c7d2ff;
+  --destructive: #ff959d;
+  --border: #484b4d;
+  --input: #777a7b;
+  --selection: #3a4a83;
+  --selection-foreground: #ffffff;
+  --chart-1: #9badff;
+  --chart-2: #b7b4ac;
+  --chart-3: #c5afea;
+  --chart-4: #e6b779;
+  --chart-5: #83c5b4;
 }
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    @apply border-border;
   }
   body {
     @apply bg-background text-foreground;
   }
   html {
     @apply font-sans;
+    accent-color: var(--primary);
+  }
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-ui);
+    overflow-wrap: anywhere;
+  }
+  a {
+    color: var(--primary);
+    text-underline-offset: 0.2em;
+  }
+  a:hover {
+    text-decoration-line: underline;
+  }
+  button, input, textarea, select {
+    font: inherit;
+  }
+  input, textarea, select {
+    border-color: var(--input);
+  }
+  ::selection {
+    background: var(--selection);
+    color: var(--selection-foreground);
+  }
+}
+
+/* Unlayered so existing outline-none utilities cannot hide keyboard focus. */
+:where(a, button, input, textarea, select, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 3px;
+}
+
+:where(button, input, textarea, select):disabled,
+:where([aria-disabled="true"]) {
+  cursor: not-allowed;
+}
+
+:where(button, input, textarea, select)[aria-busy="true"] {
+  cursor: progress;
+}
+
+:where(input, textarea, select)[aria-invalid="true"] {
+  border-color: var(--destructive);
+  box-shadow: 0 0 0 1px var(--destructive);
+}
+
+:where([role="option"][aria-selected="true"], [role="menuitemradio"][aria-checked="true"]) {
+  background: var(--accent);
+  color: var(--accent-foreground);
+  box-shadow: inset 3px 0 var(--primary);
+}
+
+/* Reading text uses Song; headings, source attribution and captions use Hei.
+   Semantic prose colors also cover code, tables and quotations in both themes. */
+.wiki-content {
+  --tw-prose-body: var(--foreground);
+  --tw-prose-headings: var(--foreground);
+  --tw-prose-lead: var(--muted-foreground);
+  --tw-prose-links: var(--primary);
+  --tw-prose-bold: var(--foreground);
+  --tw-prose-counters: var(--muted-foreground);
+  --tw-prose-bullets: var(--muted-foreground);
+  --tw-prose-hr: var(--border);
+  --tw-prose-quotes: var(--foreground);
+  --tw-prose-quote-borders: var(--input);
+  --tw-prose-captions: var(--muted-foreground);
+  --tw-prose-code: var(--foreground);
+  --tw-prose-pre-code: var(--foreground);
+  --tw-prose-pre-bg: var(--muted);
+  --tw-prose-th-borders: var(--input);
+  --tw-prose-td-borders: var(--border);
+  font-family: var(--font-reading);
+  font-size: 1.125rem;
+  line-height: 1.85;
+  overflow-wrap: anywhere;
+}
+
+.wiki-content :where(h1, h2, h3, h4, h5, h6, cite, figcaption),
+.reading-meta {
+  font-family: var(--font-ui);
+}
+
+.wiki-content :where(blockquote, cite) {
+  font-style: normal;
+}
+
+.wiki-content blockquote p:first-of-type::before,
+.wiki-content blockquote p:last-of-type::after {
+  content: none;
+}
+
+.wiki-content a.wiki-link {
+  color: var(--primary);
+  font-weight: inherit;
+  text-decoration: none;
+}
+
+.wiki-content a.wiki-link:hover,
+.wiki-content a.wiki-link:focus-visible {
+  text-decoration-line: underline;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
 
 /* Markdown 渲染器输出的 wiki-link（src/lib/markdown.ts）。
-   普通双链沿用 prose 的链接样式，仅补充下划线偏移；红链是 MediaWiki 式的缺口标记。 */
+   蓝色双链不额外加粗，悬停／键盘聚焦时显示下划线（#85）；红链保留缺口标记。 */
 .wiki-content .wiki-link {
-  @apply underline decoration-foreground/30 underline-offset-4;
+  @apply text-primary underline-offset-4;
 }
 
 .wiki-content .wiki-link--red {

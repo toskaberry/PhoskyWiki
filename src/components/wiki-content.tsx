@@ -5,7 +5,7 @@ import Link from "next/link";
 export function WikiContent({ html }: { html: string }) {
   return (
     <div
-      className="wiki-content prose prose-zinc dark:prose-invert max-w-none"
+      className="wiki-content prose max-w-none"
       dangerouslySetInnerHTML={{ __html: html }}
     />
   );

@@ -3,7 +3,8 @@
 import { defaultKeymap, history, historyKeymap, isolateHistory, redo, undo } from "@codemirror/commands";
 import { autocompletion, insertCompletionText, pickedCompletion, startCompletion, type CompletionSource } from "@codemirror/autocomplete";
 import { markdown } from "@codemirror/lang-markdown";
-import { defaultHighlightStyle, syntaxHighlighting, syntaxTree } from "@codemirror/language";
+import { HighlightStyle, syntaxHighlighting, syntaxTree } from "@codemirror/language";
+import { tags } from "@lezer/highlight";
 import { Compartment, EditorSelection, EditorState, Transaction } from "@codemirror/state";
 import { EditorView, keymap, placeholder } from "@codemirror/view";
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
@@ -52,14 +53,27 @@ const editorTheme = EditorView.theme({
   "&": { backgroundColor: "var(--background)", color: "var(--foreground)", fontSize: "16px" },
   "&.cm-focused": { outline: "2px solid var(--ring)", outlineOffset: "-2px" },
   ".cm-content": { minHeight: "20rem", padding: "12px", overflowWrap: "anywhere" },
-  ".cm-scroller": { fontFamily: "var(--font-mono)", overflow: "auto" },
+  ".cm-scroller": { fontFamily: "var(--font-code)", overflow: "auto" },
   ".cm-cursor": { borderLeftColor: "var(--foreground)" },
   ".cm-selectionBackground, &.cm-focused .cm-selectionBackground": { backgroundColor: "var(--accent)" },
   ".cm-tooltip": { backgroundColor: "var(--popover)", color: "var(--popover-foreground)", borderColor: "var(--border)", maxWidth: "calc(100vw - 32px)" },
   ".cm-tooltip-autocomplete > ul": { maxWidth: "100%" },
   ".cm-tooltip-autocomplete ul li": { padding: "8px", whiteSpace: "normal", overflowWrap: "anywhere" },
-  ".cm-tooltip-autocomplete ul li[aria-selected]": { backgroundColor: "var(--accent)", color: "var(--accent-foreground)" },
+  ".cm-tooltip-autocomplete ul li[aria-selected=true]": { backgroundColor: "var(--accent)", color: "var(--accent-foreground)" },
 });
+
+// The built-in highlight style uses fixed colors for light backgrounds. CSS
+// variables let an open editor change theme without rebuilding its state/undo history.
+const editorHighlightStyle = HighlightStyle.define([
+  { tag: [tags.meta, tags.comment, tags.processingInstruction], color: "var(--muted-foreground)" },
+  { tag: tags.heading, color: "var(--foreground)", fontWeight: "bold" },
+  { tag: tags.strong, fontWeight: "bold" },
+  { tag: tags.emphasis, fontStyle: "italic" },
+  { tag: tags.strikethrough, textDecoration: "line-through" },
+  { tag: [tags.link, tags.url], color: "var(--primary)", textDecoration: "underline" },
+  { tag: [tags.quote, tags.monospace], color: "var(--foreground)" },
+  { tag: tags.invalid, color: "var(--destructive)" },
+]);
 
 const formats = [
   { label: "标题", before: "\n## ", after: "\n", fallback: "小节标题" },
@@ -103,7 +117,7 @@ export function MarkdownEditor({ value, onChange, resolvedWikiLinks }: {
       state: EditorState.create({
         doc: initialValue.current,
         extensions: [
-          markdown(), history(), syntaxHighlighting(defaultHighlightStyle),
+          markdown(), history(), syntaxHighlighting(editorHighlightStyle),
           completionConfig.current.of([]),
           keymap.of([...defaultKeymap, ...historyKeymap]),
           EditorView.lineWrapping, editorTheme,

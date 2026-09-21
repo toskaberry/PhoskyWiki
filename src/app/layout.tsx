@@ -1,8 +1,11 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
+import "@fontsource-variable/noto-sans-sc/wght.css";
+import "@fontsource-variable/noto-serif-sc/wght.css";
 import "./globals.css";
 
 import { SiteHeader } from "@/components/site-header";
+import { themeInitScript } from "@/lib/theme";
 
 export const metadata: Metadata = {
   title: {
@@ -15,7 +18,10 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="zh-CN" className="h-full font-sans antialiased">
+    <html lang="zh-CN" className="h-full font-sans antialiased" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+      </head>
       <body className="flex min-h-full flex-col bg-background text-foreground">
         <SiteHeader />
         <div className="flex flex-1 flex-col">{children}</div>
