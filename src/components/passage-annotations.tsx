@@ -21,6 +21,7 @@ import { Check, Copy, Highlighter, MessageSquarePlus, Trash2, Underline, Waves }
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { WikiContent } from "@/components/wiki-content";
+import { useReadingPanels } from "@/components/reading-panels";
 import {
   isLocatedMark,
   markStyles,
@@ -407,6 +408,35 @@ export function PassageAnnotations({
     window.addEventListener("hashchange", openFromHash);
     return () => window.removeEventListener("hashchange", openFromHash);
   }, [bodyRoot, viewerId]);
+
+  // F07 按需面板（#95）：感想面板渲染在正文列之外（留白/覆盖层），数据与「回到原句」
+  // 定位由本组件提供。仅同步列表与注册回调，不改变既有句子面板、草稿与恢复语义；
+  // 无 Provider（组件独立使用）时桥接为空。
+  const panels = useReadingPanels();
+  useEffect(() => { panels?.syncThoughts(thoughts); }, [panels, thoughts]);
+  const locateForPanel = useCallback((thought: ThoughtView) => {
+    if (isLocatedThought(thought)) {
+      const sentence = indexRef.current?.sentences.find(row => row.start < thought.end && row.end > thought.start);
+      if (!sentence) return;
+      bodyRoot()?.querySelector<HTMLElement>(`[data-sentence-start="${sentence.start}"]`)
+        ?.scrollIntoView({ block: "center" });
+      setChangedOpen(false);
+      setPanelError(null);
+      setPanel({ sentence, own: thought.authorId === viewerId });
+      requestAnimationFrame(() => {
+        const card = document.getElementById(`thought-${thought.id}`);
+        card?.focus({ preventScroll: true });
+        card?.scrollIntoView({ block: "nearest" });
+      });
+    } else {
+      setPanel(null);
+      setChangedOpen(true);
+    }
+  }, [bodyRoot, viewerId]);
+  useEffect(() => {
+    panels?.registerLocate(locateForPanel);
+    return () => panels?.registerLocate(null);
+  }, [locateForPanel, panels]);
 
   useEffect(() => {
     if (!panel && !changedOpen) return;
