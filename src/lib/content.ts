@@ -233,6 +233,8 @@ export async function getPerspectiveDetail(id: number) {
       interpreterSlug: interpreterPages.slug,
       interpreterBirthYear: interpreters.birthYear,
       interpreterDeathYear: interpreters.deathYear,
+      // F07 资料面板（#95）：视角页按需展示诠释者关键文本（只读字段，无行为变化）。
+      interpreterKeyTexts: interpreters.keyTexts,
     })
     .from(perspectives)
     .innerJoin(pages, eq(pages.id, perspectives.pageId))

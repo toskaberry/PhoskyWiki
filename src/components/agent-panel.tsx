@@ -17,7 +17,7 @@ function CitedText({ text, sources }: { text: string; sources: AgentSource[] }) 
   });
 }
 
-export function AgentPanel({ termId }: { termId: number }) {
+export function AgentPanel({ termId, heading = true }: { termId: number; heading?: boolean }) {
   const rawConfig = useSyncExternalStore(subscribeAgentConfig, readAgentConfig, serverAgentConfig);
   const config = parseAgentConfig(rawConfig);
   const [question, setQuestion] = useState("");
@@ -78,7 +78,7 @@ export function AgentPanel({ termId }: { termId: number }) {
 
   return (
     <aside aria-label="Agent 解读" className="mt-6 min-w-0 rounded-lg border border-border bg-card p-4 text-sm">
-      <h2 className="text-lg font-semibold">Agent 解读</h2>
+      {heading && <h2 className="text-lg font-semibold">Agent 解读</h2>}
       <p className="mt-2 text-xs leading-relaxed text-muted-foreground">游客亦可使用。配置仅存此浏览器；问题和当前词条及一跳邻居正文直发你的模型端点。</p>
       <details className="mt-4">
         <summary className="cursor-pointer font-medium">模型配置</summary>

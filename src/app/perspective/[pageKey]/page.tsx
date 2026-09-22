@@ -6,6 +6,8 @@ import { PageComments } from "@/components/page-comments";
 import { AgentPanel } from "@/components/agent-panel";
 import { HistoryLink } from "@/components/history-link";
 import { PassageAnnotations } from "@/components/passage-annotations";
+import { KeyTexts } from "@/components/key-texts";
+import { ReadingPanelsArea, ReadingPanelsProvider, ReadingPanelTriggers } from "@/components/reading-panels";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 
@@ -104,6 +106,9 @@ export default async function PerspectivePage({ params }: Params) {
           )}
         </div>
       </header>
+      {/* F07（#95）：资料／感想／Agent 解读改为按需面板——初始收起，宽屏落正文列
+          外的留白列、窄屏为可关闭覆盖层；面板内容常驻挂载，开关不丢本页状态。 */}
+      <ReadingPanelsProvider initialThoughts={thoughtState.thoughts}>
       <div className={styles.layout}>
         {headings.length > 0 && (
           <aside className={styles.desktopContents}>
@@ -112,6 +117,7 @@ export default async function PerspectivePage({ params }: Params) {
           </aside>
         )}
         <div className={styles.body}>
+          <ReadingPanelTriggers />
           {headings.length > 0 && (
             <details className={styles.mobileContents}>
               <summary>章节目录</summary>
@@ -147,35 +153,46 @@ export default async function PerspectivePage({ params }: Params) {
           <BacklinkPanel items={backlinks} />
         </div>
 
-        <aside className={styles.tools} aria-label="阅读资料与工具">
-          <AgentPanel key={page.id} termId={detail.termId} />
-          <Infobox
-            title={detail.title}
-            rows={[
-              {
-                label: "类型",
-                content: "视角（原子知识单位）",
-              },
-              {
-                label: "所属词条",
-                content: <Link href={termHref}>{detail.termTitle}</Link>,
-              },
-              {
-                label: "诠释者",
-                content: <Link href={interpreterHref}>{detail.interpreterName}</Link>,
-              },
-              {
-                label: "生卒",
-                content: formatYears(detail.interpreterBirthYear, detail.interpreterDeathYear),
-              },
-              { label: "正文双链", content: `${targets.size} 条（指向其他词条）` },
-            ]}
-          />
-          <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
-            红色虚线标记的词条尚未创建——那是留给编者的写作缺口。
-          </p>
-        </aside>
+        <ReadingPanelsArea
+          materials={
+            <>
+              <Infobox
+                title={detail.title}
+                rows={[
+                  {
+                    label: "类型",
+                    content: "视角（原子知识单位）",
+                  },
+                  {
+                    label: "所属词条",
+                    content: <Link href={termHref}>{detail.termTitle}</Link>,
+                  },
+                  {
+                    label: "诠释者",
+                    content: <Link href={interpreterHref}>{detail.interpreterName}</Link>,
+                  },
+                  {
+                    label: "生卒",
+                    content: formatYears(detail.interpreterBirthYear, detail.interpreterDeathYear),
+                  },
+                  { label: "正文双链", content: `${targets.size} 条（指向其他词条）` },
+                ]}
+              />
+              {detail.interpreterKeyTexts.length > 0 && (
+                <section className="mt-3">
+                  <h3 className="mb-2 text-sm font-semibold">诠释者关键文本</h3>
+                  <KeyTexts items={detail.interpreterKeyTexts} />
+                </section>
+              )}
+              <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
+                红色虚线标记的词条尚未创建——那是留给编者的写作缺口。
+              </p>
+            </>
+          }
+          agent={<AgentPanel key={page.id} termId={detail.termId} heading={false} />}
+        />
       </div>
+      </ReadingPanelsProvider>
       <div className={styles.comments}>
         <PageComments pageId={page.id} href={pagePath("perspective", page.slug, page.id)} title="视角评论" user={sessionUser} />
       </div>

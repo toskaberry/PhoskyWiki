@@ -15,6 +15,13 @@ async function configure(page: Page, endpoint: string) {
   return panel;
 }
 
+/** F07（#95）：视角页的 Agent 解读改为按需面板，先从触发入口打开再使用。 */
+async function openPerspectiveAgentPanel(page: Page) {
+  const trigger = page.getByRole("button", { name: "Agent 解读", exact: true });
+  await trigger.click();
+  return page.getByRole("complementary", { name: "Agent 解读" });
+}
+
 test("游客保存本地配置，直连端点并在流结束前看到回答与可点击引用", async ({ page, baseURL }) => {
   let payload: { model: string; stream: boolean; messages: { content: string }[] } | undefined;
   let authorization: string | undefined;
@@ -88,6 +95,8 @@ test("视角页生成有序跨词条阅读路径，引用可跳到视角且未�
   await page.getByRole("link", { name: "主体性", exact: true }).click();
   await page.getByRole("link", { name: "拉康论主体性", exact: true }).click();
   await expect(page).toHaveURL(/\/perspective\//);
+  // 按需面板初始收起：先打开 Agent 解读面板再配置（F07 #95）
+  await openPerspectiveAgentPanel(page);
   const panel = await configure(page, "https://model.example/v1/");
   let nextTitle = "", perspectiveURL = "";
   await page.route("https://model.example/v1/chat/completions", async (route) => {
