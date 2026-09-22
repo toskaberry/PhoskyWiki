@@ -32,6 +32,17 @@ export const GraphScene = memo(function GraphScene({ data, layout, camera, width
     const p = positions.get(node.id);
     if (!p || (activeId !== null && !neighbors.has(node.id))) return [];
     const center = screen(p.x, p.y), radius = p.radius * camera.scale;
+    // 当前节点的标签是选中层级的一部分（#97）：始终显示，避让规则让位于轮廓层级。
+    if (node.id === activeId) {
+      const textWidth = Array.from(node.title).length * 15;
+      const fits = [
+        { x: center.x + radius + 8, y: center.y - 9 },
+        { x: center.x - textWidth / 2, y: center.y + radius + 8 },
+        { x: center.x - textWidth / 2, y: center.y - radius - 26 },
+      ].find(point => point.x >= 8 && point.y >= 8 && point.x + textWidth <= width - 8 && point.y + 18 <= height - 8);
+      const point = fits ?? { x: Math.min(Math.max(8, center.x - textWidth / 2), Math.max(8, width - textWidth - 8)), y: center.y + radius + 8 };
+      return [<text key={node.id} x={point.x} y={point.y + 13} fontSize={12.5} fontWeight={600} fill="var(--foreground)" stroke="var(--card)" strokeWidth={5} paintOrder="stroke" pointerEvents="none">{node.title}</text>];
+    }
     const textWidth = Array.from(node.title).length * 14;
     for (const box of [
       { x: center.x + radius + 6, y: center.y - 8, width: textWidth, height: 18 },
@@ -49,11 +60,13 @@ export const GraphScene = memo(function GraphScene({ data, layout, camera, width
     <defs>{data.schools.map(s => <radialGradient key={s.id} id={`${gradientId}-${s.id}`}><stop offset="0%" stopColor={s.color} stopOpacity={.12} /><stop offset="65%" stopColor={s.color} stopOpacity={.03} /><stop offset="100%" stopColor={s.color} stopOpacity={0} /></radialGradient>)}</defs>
     <g transform={`translate(${width / 2},${height / 2}) scale(${camera.scale}) translate(${-camera.x},${-camera.y})`}>
       <g pointerEvents="none">{layout.communities.map(c => <circle key={c.schoolId} cx={c.x} cy={c.y} r={c.radius} fill={`url(#${gradientId}-${c.schoolId})`} opacity={activeId === null || activeSchools.has(c.schoolId) ? 1 : .12} />)}</g>
-      <g pointerEvents="none" stroke="var(--muted-foreground)">{data.edges.map(edge => {
+      <g pointerEvents="none">{data.edges.map(edge => {
         const source = positions.get(edge.source), target = positions.get(edge.target);
         if (!source || !target) return null;
         const touches = edge.source === activeId || edge.target === activeId;
-        return <line key={`${edge.source}-${edge.target}`} x1={source.x} y1={source.y} x2={target.x} y2={target.y} strokeWidth={touches ? 1.8 : 1} opacity={activeId === null ? .075 : touches ? .65 : .015} />;
+        // 关系层级（#97）：当前节点触边用前景色粗线，其余边退为底纹。
+        return <line key={`${edge.source}-${edge.target}`} x1={source.x} y1={source.y} x2={target.x} y2={target.y}
+          stroke={touches ? "var(--foreground)" : "var(--muted-foreground)"} strokeWidth={touches ? 1.8 : 1} opacity={activeId === null ? .075 : touches ? .55 : .02} />;
       })}</g>
       {data.nodes.map(node => {
         const p = positions.get(node.id);
@@ -64,6 +77,8 @@ export const GraphScene = memo(function GraphScene({ data, layout, camera, width
           onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); onOpen(node); } if (e.key === " ") { e.preventDefault(); onSelect(node.id); } }}>
           <circle data-node-boundary="true" r={p.radius} fill={node.schoolAffinities.length === 1 ? schools.get(node.schoolAffinities[0].schoolId)?.color : UNSCHOOLED_COLOR} stroke={node.id === activeId ? "var(--foreground)" : "var(--card)"} strokeWidth={node.id === activeId ? 2.5 : 1.5} />
           {node.schoolAffinities.length > 1 && sectors(node, p.radius - 1.5).map(sector => <path key={sector.schoolId} data-school-sector={sector.schoolId} d={sector.path} fill={schools.get(sector.schoolId)?.color ?? UNSCHOOLED_COLOR} />)}
+          {/* 轮廓层级（#97）：选中节点加外圈虚线环，保留扇区可辨认的学派身份色。 */}
+          {node.id === activeId && <circle aria-hidden="true" r={p.radius + 6} fill="none" stroke="var(--foreground)" strokeWidth={1.25} strokeDasharray="3 3" opacity={.7} pointerEvents="none" />}
         </g>;
       })}
     </g>

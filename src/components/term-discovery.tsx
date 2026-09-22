@@ -8,11 +8,13 @@ import { useGuestInterests } from "@/lib/guest-interest-store";
 import { hasAnyInterest, serializeInterestSet } from "@/lib/interest-tags";
 import type { TermDiscovery } from "@/lib/term-discovery";
 
-export function TermDiscoveryPanel({ termId, initial, guest, resources, children }: {
+export function TermDiscoveryPanel({ termId, initial, guest, resources, exploreNav, children }: {
   termId: number;
   initial: TermDiscovery;
   guest: boolean;
   resources: ReactNode;
+  /** 继续探索区的索引导航（#97：词条页按真实存在的区块生成锚点）。 */
+  exploreNav?: ReactNode;
   children: ReactNode;
 }) {
   const selected = useGuestInterests();
@@ -66,8 +68,13 @@ export function TermDiscoveryPanel({ termId, initial, guest, resources, children
       </section>
       {resources}
       <section aria-labelledby="term-explore-heading" className="mt-12 border-t border-border pt-8">
-        <h2 id="term-explore-heading" className="text-2xl font-semibold">继续探索</h2>
-        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">从相关词条、引用本页的视角与双链邻居，找到下一步阅读入口。</p>
+        <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
+          <div className="min-w-0">
+            <h2 id="term-explore-heading" className="text-2xl font-semibold">继续探索</h2>
+            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">从相关词条、引用本页的视角与双链邻居，找到下一步阅读入口。</p>
+          </div>
+          {exploreNav}
+        </div>
         <RelatedTermsPanel items={data.relatedTerms} />
         {children}
       </section>
