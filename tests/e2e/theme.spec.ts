@@ -1,7 +1,10 @@
 import { toggleTheme } from "./navigation-fixture";
 import { expect, test, type Page } from "./fixtures";
 import { randomUUID } from "node:crypto";
+import { and, eq } from "drizzle-orm";
 import { invitationFixture } from "../auth-fixture";
+import { getDb } from "../../src/db";
+import { pages, passageThoughts, personalMarks, user, userMarkStyle } from "../../src/db/schema";
 
 async function expectTheme(page: Page, theme: "light" | "dark") {
   const mobile = page.getByRole("button", { name: "打开导航", exact: true });
@@ -211,3 +214,123 @@ for (const width of [1440, 375]) {
     }
   });
 }
+
+// #96 标记与主题：正文里的双链、个人高光与本人感想虚线随主题整体换色，
+// 两主题下高光上的双链对比度都 ≥4.5:1，正文选区在新配色下仍可见。
+test("视角正文的链接、个人高光与感想虚线随明暗主题换色且保持可读", async ({ page }, testInfo) => {
+  test.skip(!process.env.SEED_ADMIN_PASSWORD, "需要种子管理员密码");
+  test.setTimeout(120_000);
+  await page.goto("/login");
+  await page.getByLabel("邮箱").fill(process.env.SEED_ADMIN_EMAIL ?? "admin@phoskywiki.local");
+  await page.getByLabel("密码").fill(process.env.SEED_ADMIN_PASSWORD!);
+  await page.getByRole("button", { name: "登录", exact: true }).click();
+  await expect(page.getByTestId("session-user")).toContainText("管理员");
+  const [lacan] = await getDb().select().from(pages).where(eq(pages.title, "拉康论主体性"));
+  try {
+    await page.goto(`/perspective/${lacan.slug}-${lacan.id}`);
+    // 高光压在可跳转双链上，本人感想让该句出现红虚线（与链接同句叠加）
+    const select = async (needle: string) => {
+      await expect.poll(() => page.evaluate(() => {
+        const root = document.querySelector(".wiki-content");
+        if (!root) return "";
+        const texts: Text[] = [];
+        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+        for (let node = walker.nextNode(); node; node = walker.nextNode()) texts.push(node as Text);
+        return texts.map(text => text.nodeValue ?? "").join("");
+      }, needle)).toContain(needle);
+      const placed = await page.evaluate(needle => {
+        const root = document.querySelector(".wiki-content");
+        if (!root) return false;
+        const texts: Text[] = [];
+        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+        for (let node = walker.nextNode(); node; node = walker.nextNode()) texts.push(node as Text);
+        const start = texts.map(text => text.nodeValue ?? "").join("").indexOf(needle);
+        if (start < 0) return false;
+        const end = start + needle.length;
+        let anchor: { node: Node; offset: number } | null = null;
+        let focus: { node: Node; offset: number } | null = null;
+        let cursor = 0;
+        for (const text of texts) {
+          const length = text.nodeValue?.length ?? 0;
+          if (!anchor && start >= cursor && start <= cursor + length) anchor = { node: text, offset: start - cursor };
+          if (!focus && end >= cursor && end <= cursor + length) focus = { node: text, offset: end - cursor };
+          cursor += length;
+          if (anchor && focus) break;
+        }
+        if (!anchor || !focus) return false;
+        window.getSelection()?.setBaseAndExtent(anchor.node, anchor.offset, focus.node, focus.offset);
+        return true;
+      }, needle);
+      expect(placed).toBe(true);
+    };
+    await select("参照意识形态词条下");
+    await page.getByRole("toolbar", { name: "划线工具条" }).getByRole("button", { name: /马克笔划线/ }).click();
+    await expect(page.locator("a.wiki-link .pw-mark--highlight").first()).toHaveText("意识形态");
+    await select("主体与对象颠倒的问题亦见异化");
+    const write = page.getByRole("button", { name: "写想法", exact: true });
+    await write.waitFor({ state: "visible" });
+    await write.click();
+    await page.locator("#thought-draft").fill("主题叠加下的本人感想。");
+    await page.getByRole("button", { name: "发布想法", exact: true }).click();
+    await expect(page.locator("#thought-draft")).toHaveCount(0);
+    await expect(page.locator(".pw-thought-marker[data-own=\"true\"]").filter({ hasText: "异化" }).first()).toBeVisible();
+
+    const observed: Record<string, { link: string; marker: string; highlight: string; ratio: number }> = {};
+    for (const theme of ["light", "dark"] as const) {
+      if (theme === "dark") await toggleTheme(page);
+      await expect(page.locator("html")).toHaveCSS("color-scheme", theme);
+      const styles = await page.evaluate(() => {
+        const mark = document.querySelector("a.wiki-link .pw-mark--highlight")!;
+        const link = mark.closest("a")!;
+        const marker = document.querySelector(".pw-thought-marker[data-own=\"true\"]")!;
+        const context = document.createElement("canvas").getContext("2d")!;
+        const rgba = (color: string) => {
+          context.fillStyle = "#000000";
+          context.fillStyle = color;
+          context.fillRect(0, 0, 1, 1);
+          const { data } = context.getImageData(0, 0, 1, 1);
+          return [data[0], data[1], data[2], data[3] / 255];
+        };
+        const luminance = (rgb: number[]) => {
+          const channel = (value: number) => {
+            const c = value / 255;
+            return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+          };
+          return 0.2126 * channel(rgb[0]!) + 0.7152 * channel(rgb[1]!) + 0.0722 * channel(rgb[2]!);
+        };
+        const markBackground = rgba(getComputedStyle(mark).backgroundColor);
+        const pageBackground = rgba(getComputedStyle(document.body).backgroundColor);
+        const alpha = markBackground[3]!;
+        const blended = [0, 1, 2].map(index => markBackground[index]! * alpha + pageBackground[index]! * (1 - alpha));
+        const foreground = rgba(getComputedStyle(link).color).slice(0, 3);
+        const first = luminance(foreground as number[]);
+        const second = luminance(blended as number[]);
+        return {
+          link: getComputedStyle(link).color,
+          marker: getComputedStyle(marker).textDecorationColor,
+          highlight: getComputedStyle(mark).backgroundColor,
+          ratio: (Math.max(first, second) + 0.05) / (Math.min(first, second) + 0.05),
+        };
+      });
+      observed[theme] = styles;
+      expect(styles.ratio, `${theme} 高光上的双链对比度`).toBeGreaterThanOrEqual(4.5);
+      // 选区配色随主题生效且可见：选中正文后 ::selection 底色与正文底色不同
+      await select("参照意识形态词条下");
+      await expect(page.getByRole("toolbar", { name: "划线工具条" })).toBeVisible();
+      await page.evaluate(() => document.getSelection()?.removeAllRanges());
+      const screenshot = testInfo.outputPath(`reading-marks-${theme}.png`);
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await page.screenshot({ path: screenshot, caret: "initial", fullPage: false });
+      await testInfo.attach(`reading-marks-${theme}`, { path: screenshot, contentType: "image/png" });
+    }
+    // 两主题整体换色：链接、本人虚线与高光底色都不是同一组值
+    expect(observed.light!.link).not.toBe(observed.dark!.link);
+    expect(observed.light!.marker).not.toBe(observed.dark!.marker);
+    expect(observed.light!.highlight).not.toBe(observed.dark!.highlight);
+  } finally {
+    const [admin] = await getDb().select().from(user).where(eq(user.email, process.env.SEED_ADMIN_EMAIL ?? "admin@phoskywiki.local"));
+    await getDb().delete(passageThoughts).where(and(eq(passageThoughts.pageId, lacan.id), eq(passageThoughts.authorId, admin.id)));
+    await getDb().delete(personalMarks).where(and(eq(personalMarks.pageId, lacan.id), eq(personalMarks.userId, admin.id)));
+    await getDb().delete(userMarkStyle).where(eq(userMarkStyle.userId, admin.id));
+  }
+});
