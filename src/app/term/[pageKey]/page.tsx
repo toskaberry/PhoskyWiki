@@ -74,9 +74,9 @@ export default async function TermPage({ params }: Params) {
     <PageContainer className="max-w-6xl [overflow-wrap:anywhere]">
       <header className="border-b border-border pb-8">
         <nav aria-label="面包屑" className="flex flex-wrap gap-x-2 gap-y-1 text-sm text-muted-foreground">
-          <Link href="/">首页</Link>
+          <Link href="/" className="py-1">首页</Link>
           <span aria-hidden="true">/</span>
-          <Link href="/terms">词条索引</Link>
+          <Link href="/terms" className="py-1">词条索引</Link>
           <span aria-hidden="true">/</span>
           <span aria-current="page">{term.title}</span>
         </nav>

@@ -21,7 +21,7 @@ export default async function InterestsPage() {
     <PageContainer className="max-w-4xl">
       <header className="border-b border-foreground pb-8">
         <nav aria-label="面包屑" className="flex flex-wrap gap-x-2 gap-y-1 text-sm text-muted-foreground">
-          <Link href="/">首页</Link>
+          <Link href="/" className="py-1">首页</Link>
           <span aria-hidden="true">/</span>
           <span aria-current="page">兴趣标签</span>
         </nav>

@@ -35,7 +35,7 @@ export function TaskPageHeader({
             {item.href ? (
               <Link
                 href={item.href}
-                className="underline-offset-4 hover:text-foreground hover:underline"
+                className="py-1 underline-offset-4 hover:text-foreground hover:underline"
               >
                 {item.label}
               </Link>

@@ -40,8 +40,8 @@ export default async function InterpreterPage({ params }: Params) {
   return (
     <PageContainer>
       <nav aria-label="面包屑" className="mb-6 flex flex-wrap items-center gap-x-2 gap-y-2 break-words text-sm text-muted-foreground">
-        <Link href="/" className="hover:text-foreground">首页</Link><span>/</span>
-        <Link href="/interpreters" className="hover:text-foreground">诠释者索引</Link><span>/</span>
+        <Link href="/" className="py-1 hover:text-foreground">首页</Link><span>/</span>
+        <Link href="/interpreters" className="py-1 hover:text-foreground">诠释者索引</Link><span>/</span>
         <span aria-current="page" className="min-w-0 break-words">{interpreter.title}</span>
       </nav>
       <DiscoveryHeader label="人物档案 / 诠释者" title={interpreter.title}>
