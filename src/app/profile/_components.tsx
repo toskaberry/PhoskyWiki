@@ -1,4 +1,5 @@
 import type { SubmissionKind, SubmissionStatus } from "@/db/schema";
+import { Callout } from "@/components/task-page";
 
 export const kindLabels: Record<SubmissionKind, string> = {
   edit: "编辑视角",
@@ -20,9 +21,8 @@ export function RejectionReason({ reason }: { reason: string | null }) {
   if (reason === null) return null;
 
   return (
-    <div className="mt-3 rounded-md border border-border bg-muted/40 p-3 text-sm">
-      <p className="font-medium">驳回理由</p>
-      <p className="mt-1 whitespace-pre-wrap break-words">{reason}</p>
-    </div>
+    <Callout tone="warning" title="驳回理由" className="mt-3 max-w-3xl">
+      <span className="whitespace-pre-wrap break-words">{reason}</span>
+    </Callout>
   );
 }

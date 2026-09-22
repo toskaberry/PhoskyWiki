@@ -320,3 +320,26 @@
   top: -4px;
   transform: translateX(-50%) rotate(225deg);
 }
+
+/* 图片上传的不确定进度条（F11）：细线高度 + 主题色；浏览器自带 indeterminate 动画，
+   减少动态效果时由上方全局规则收敛为静止。 */
+.pw-upload-progress {
+  appearance: none;
+  -moz-appearance: none;
+  border: none;
+  border-radius: 9999px;
+  background: var(--muted);
+  color: var(--primary);
+}
+.pw-upload-progress::-webkit-progress-bar {
+  border-radius: 9999px;
+  background: var(--muted);
+}
+.pw-upload-progress::-webkit-progress-value {
+  border-radius: 9999px;
+  background: var(--primary);
+}
+.pw-upload-progress::-moz-progress-bar {
+  border-radius: 9999px;
+  background: var(--primary);
+}
