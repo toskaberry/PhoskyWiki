@@ -23,6 +23,7 @@
 !/drizzle.config.ts
 !/vitest.config.ts
 !/playwright.config.ts
+!/playwright.wiki-preview.config.ts
 !/playwright.r2.config.ts
 !/Dockerfile
 !/Dockerfile.backup

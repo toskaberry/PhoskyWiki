@@ -30,6 +30,8 @@ import { pagePath } from "@/lib/slug";
 import type { WikiLinkTarget } from "@/lib/markdown";
 import { isPageVisible } from "@/lib/page-visibility";
 
+type ContentDb = Db | Parameters<Parameters<Db["transaction"]>[0]>[0];
+
 /** 在线页面（未软删除）的最小信息。 */
 export interface LivePage {
   id: number;
@@ -38,8 +40,8 @@ export interface LivePage {
   slug: string;
 }
 
-export async function getLivePage(id: number): Promise<LivePage | null> {
-  const [row] = await getDb()
+export async function getLivePage(id: number, db: ContentDb = getDb()): Promise<LivePage | null> {
+  const [row] = await db
     .select({ id: pages.id, type: pages.type, title: pages.title, slug: pages.slug })
     .from(pages)
     .where(and(eq(pages.id, id), isPageVisible(pages.id)))
@@ -76,8 +78,8 @@ export async function listPerspectivePairs() {
 }
 
 /** 词条详情（信息框用）。 */
-export async function getTermDetail(id: number) {
-  const [row] = await getDb()
+export async function getTermDetail(id: number, db: ContentDb = getDb()) {
+  const [row] = await db
     .select({
       id: pages.id,
       title: pages.title,
@@ -111,8 +113,8 @@ export interface PerspectiveListItem {
  */
 export async function listPerspectivesOfTerm(
   termId: number,
+  db: ContentDb = getDb(),
 ): Promise<PerspectiveListItem[]> {
-  const db = getDb();
   const interpreterPages = alias(pages, "interpreter_pages");
   const sourcePages = alias(pages, "source_pages");
   // 热度 = 在线引用方的双链数（软删除的引用方不加热，与反链面板同一口径）
@@ -158,8 +160,8 @@ export async function listPerspectivesOfTerm(
 }
 
 /** 页面当前（head）修订的 Markdown 源文本。 */
-export async function getHeadContent(pageId: number): Promise<string | null> {
-  const [row] = await getDb()
+export async function getHeadContent(pageId: number, db: ContentDb = getDb()): Promise<string | null> {
+  const [row] = await db
     .select({ content: revisions.content })
     .from(revisions)
     .where(eq(revisions.pageId, pageId))
@@ -217,10 +219,10 @@ export async function listRecentPerspectives(limit = 6) {
 }
 
 /** 视角详情：所属词条 + 诠释者（含生卒年）。 */
-export async function getPerspectiveDetail(id: number) {
+export async function getPerspectiveDetail(id: number, db: ContentDb = getDb()) {
   const termPages = alias(pages, "term_pages");
   const interpreterPages = alias(pages, "interpreter_pages");
-  const [row] = await getDb()
+  const [row] = await db
     .select({
       id: pages.id,
       title: pages.title,

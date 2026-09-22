@@ -1,14 +1,10 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { WikiPreviewContent } from "@/components/wiki-preview-content";
 
 /** 渲染 Markdown 产出的安全 HTML（renderMarkdown 已过 rehype-sanitize）。 */
 export function WikiContent({ html }: { html: string }) {
-  return (
-    <div
-      className="wiki-content prose max-w-none"
-      dangerouslySetInnerHTML={{ __html: html }}
-    />
-  );
+  return <WikiPreviewContent html={html} />;
 }
 
 /** 信息框里的站内链接列表（「·」分隔，无值时显示占位符）。 */

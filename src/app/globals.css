@@ -248,6 +248,11 @@
   @apply text-primary underline-offset-4;
 }
 
+.wiki-content a.wiki-link:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 3px;
+}
+
 .wiki-content .wiki-link--red {
   @apply cursor-help text-red-700 no-underline dark:text-red-400;
   border-bottom: 1px dashed currentColor;
@@ -319,4 +324,80 @@
   bottom: auto;
   top: -4px;
   transform: translateX(-50%) rotate(225deg);
+}
+
+/* The preview lives outside wiki-content, so it cannot enter annotation text indexes. */
+.wiki-preview {
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  z-index: 60;
+  width: min(320px, calc(100vw - 16px));
+  box-sizing: border-box;
+  overflow: clip;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--popover);
+  color: var(--popover-foreground);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.15);
+  font-size: 14px;
+  line-height: 1.5;
+}
+.wiki-preview a {
+  color: var(--primary);
+}
+.wiki-preview a:hover, .wiki-preview a:focus-visible {
+  text-decoration: underline;
+}
+.wiki-preview-title {
+  flex-shrink: 0;
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 16px;
+  font-weight: 600;
+}
+.wiki-preview-interpreter {
+  flex-shrink: 0;
+  margin-top: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.wiki-preview-excerpt {
+  flex-shrink: 1;
+  min-height: 0;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  margin-top: 8px;
+}
+.wiki-preview-perspectives {
+  flex-shrink: 0;
+  display: grid;
+  gap: 3px;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.wiki-preview-perspectives a {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Low viewports need smaller spacing as well as fewer lines of content. */
+.wiki-preview[data-compact] {
+  padding: 6px 12px;
+}
+.wiki-preview[data-compact] .wiki-preview-perspectives {
+  margin-top: 4px;
+  padding-top: 0;
+  border-top: 0;
 }

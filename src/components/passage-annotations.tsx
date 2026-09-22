@@ -516,6 +516,8 @@ export function PassageAnnotations({
     if (!root) return;
     const onClick = (event: MouseEvent) => {
       const target = event.target as HTMLElement | null;
+      // Links keep their native navigation even when a marked sentence wraps them.
+      if (target?.closest("a[href]")) return;
       let marker = target?.closest<HTMLElement>(".pw-thought-marker") ?? null;
       while (marker?.parentElement?.closest(".pw-thought-marker")) {
         marker = marker.parentElement.closest<HTMLElement>(".pw-thought-marker");

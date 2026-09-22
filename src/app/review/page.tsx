@@ -8,7 +8,10 @@ import { ContentDiff } from "@/components/content-diff";
 import { TermMetadataDiff } from "@/components/term-metadata-diff";
 import { KeyTexts } from "@/components/key-texts";
 import { WikiContent } from "@/components/wiki-content";
-import { renderMarkdown } from "@/lib/markdown";
+import { getEditorCatalog, type EditorCatalog } from "@/lib/editor-catalog";
+import { getWikiLinkTargets } from "@/lib/content";
+import { pageIdFromKey } from "@/lib/slug";
+import { renderMarkdown, previewWikiLinkResolver } from "@/lib/markdown";
 import { ReviewActions } from "@/components/review-actions";
 import type { QueueItem } from "@/lib/review";
 import type { SubmissionKind } from "@/db/schema";
@@ -25,7 +28,10 @@ const kindLabels: Record<SubmissionKind, string> = {
   new_interpreter: "新建诠释者",
 };
 
-function QueueEntry({ item }: { item: QueueItem }) {
+async function QueueEntry({ item, catalog }: { item: QueueItem; catalog: EditorCatalog }) {
+  const sourceId = item.targetHref ? pageIdFromKey(item.targetHref.split("/").pop() ?? "") : null;
+  const resolvedTargets = sourceId !== null ? await getWikiLinkTargets(sourceId) : undefined;
+  const previewHtml = renderMarkdown(item.content, previewWikiLinkResolver(catalog.targets, resolvedTargets));
   const target =
     item.kind === "edit"
       ? item.targetTitle
@@ -99,7 +105,7 @@ function QueueEntry({ item }: { item: QueueItem }) {
             </div>
           )}
           {item.aliases.length > 0 && <p className="mt-2 text-sm">别名：{item.aliases.join("、")}</p>}
-          {item.content && <section aria-label="提案预览" className="mt-3 rounded border p-3"><WikiContent html={renderMarkdown(item.content, () => ({ href: "", exists: false }))} /></section>}
+          {item.content && <section aria-label="提案预览" className="mt-3 rounded border p-3"><WikiContent html={previewHtml} /></section>}
           {item.staleBase && (
             <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">
               页面在提交后已有新的修订：点「受理」会自动驳回并提示提交者基于新版重新提交。
@@ -128,7 +134,7 @@ export default async function ReviewQueuePage() {
     );
   }
 
-  const items = await listQueue();
+  const [items, catalog] = await Promise.all([listQueue(), getEditorCatalog()]);
 
   return (
     <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-8">
@@ -144,7 +150,7 @@ export default async function ReviewQueuePage() {
       ) : (
         <ul className="mt-6 flex flex-col gap-4">
           {items.map((item) => (
-            <QueueEntry key={item.id} item={item} />
+            <QueueEntry key={item.id} item={item} catalog={catalog} />
           ))}
         </ul>
       )}

@@ -11,7 +11,7 @@ import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 
 import { WikiContent } from "@/components/wiki-content";
 import { ImageUpload } from "@/components/image-upload";
-import { renderMarkdown, wikiLinkResolver, type WikiLinkTarget } from "@/lib/markdown";
+import { renderMarkdown, previewWikiLinkResolver, type WikiLinkTarget } from "@/lib/markdown";
 import type { EditorCatalog } from "@/lib/editor-catalog";
 
 function wikiCompletions(catalog: EditorCatalog): CompletionSource {
@@ -171,9 +171,7 @@ export function MarkdownEditor({ value, onChange, resolvedWikiLinks }: {
 
   const html = useMemo(() => {
     if (!catalog) return null;
-    const targets = new Map<string, WikiLinkTarget>(catalog.targets.map(({ key, href }) => [key, { href, exists: true }]));
-    for (const [key, target] of resolvedWikiLinks ?? []) targets.set(key, target);
-    return renderMarkdown(value, wikiLinkResolver(targets));
+    return renderMarkdown(value, previewWikiLinkResolver(catalog.targets, resolvedWikiLinks));
   }, [value, catalog, resolvedWikiLinks]);
   const buttonClass = "min-h-11 rounded px-3 text-sm hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring";
 
