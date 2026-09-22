@@ -6,6 +6,7 @@ import "./globals.css";
 
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
+import { WikiLinkPreviews } from "@/components/wiki-link-previews";
 import { themeInitScript } from "@/lib/theme";
 
 export const metadata: Metadata = {
@@ -28,6 +29,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <SiteHeader />
         <div id="main-content" tabIndex={-1} className="flex min-w-0 flex-1 flex-col">{children}</div>
         <SiteFooter />
+        <WikiLinkPreviews />
       </body>
     </html>
   );

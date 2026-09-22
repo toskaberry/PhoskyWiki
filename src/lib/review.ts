@@ -30,7 +30,8 @@ import type {
   SubmissionStatus,
   UserRole,
 } from "@/db/schema";
-import { rebuildPageLinks } from "@/lib/page-links";
+import { rebuildPageLinks, resolvePreviewWikiLinks } from "@/lib/page-links";
+import type { WikiLinkTarget } from "@/lib/markdown";
 import { queueSearchSync, transactionWithSearchSync } from "@/lib/search/search-sync";
 import { pagePath, slugify as slugifyTitle } from "@/lib/slug";
 import type { CreateSubmissionResult, ReviewOutcome } from "@/lib/review-types";
@@ -745,6 +746,11 @@ export interface QueueItem {
   staleBase: boolean;
   /** 编辑对象的当前内容（diff 的「当前版」一侧）；新建类为 null */
   currentContent: string | null;
+  /**
+   * 提案正文双链的落点（键 = wikiLinkKey），供提案预览与视角正文、编辑预览
+   * 同一表现（#85）：既有身份沿用 + 新名称解析，读路径口径、不落库。
+   */
+  linkTargets: [string, WikiLinkTarget][];
   content: string;
   title: string | null;
   summary: string | null;
@@ -854,6 +860,19 @@ export async function listQueue(): Promise<QueueItem[]> {
     : [];
   const titleById = new Map(mountPages.map((page) => [page.id, page.title]));
 
+  // 提案正文的双链落点：编辑类沿用目标页既有 links 身份，新建类按名称解析
+  const linkTargets = new Map<number, Map<string, WikiLinkTarget>>();
+  await Promise.all(
+    rows
+      .filter((row) => row.content.trim().length > 0)
+      .map(async (row) => {
+        linkTargets.set(
+          row.id,
+          await resolvePreviewWikiLinks(db, row.kind === "edit" ? row.pageId : null, row.content),
+        );
+      }),
+  );
+
   return rows.map((row) => {
     const page = row.pageId !== null ? pageById.get(row.pageId) : undefined;
     const headId = row.pageId !== null ? headByPage.get(row.pageId) : undefined;
@@ -877,6 +896,7 @@ export async function listQueue(): Promise<QueueItem[]> {
           ? contentByRevision.get(headId) ?? null
           : null,
       content: row.content,
+      linkTargets: [...(linkTargets.get(row.id) ?? new Map<string, WikiLinkTarget>())],
       title: row.title,
       summary: row.summary,
       aliases: row.aliases,
