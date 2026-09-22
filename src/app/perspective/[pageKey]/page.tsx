@@ -78,9 +78,9 @@ export default async function PerspectivePage({ params }: Params) {
     <main className={styles.page}>
       <header className={styles.header}>
         <nav aria-label="面包屑" className="mb-4 text-sm text-muted-foreground">
-          <Link href="/" className="py-1 hover:text-foreground">首页</Link>
+          <Link href="/" className="inline-block py-1 hover:text-foreground">首页</Link>
           <span className="mx-1.5">/</span>
-          <Link href={termHref} className="py-1 hover:text-foreground">{detail.termTitle}</Link>
+          <Link href={termHref} className="inline-block py-1 hover:text-foreground">{detail.termTitle}</Link>
           <span className="mx-1.5">/</span>
           <span aria-current="page">{detail.title}</span>
         </nav>
