@@ -27,6 +27,7 @@ test("不可用档案提供明确状态与索引返回入口", async ({ page }) 
 });
 
 test("搜索保留类型筛选、联想与真实视角导航", async ({ page }) => {
+  test.skip(!process.env.E2E_MEILI_HOST, "Requires the isolated real search service");
   await page.goto("/search?q=主体性");
   const main = page.getByRole("main");
   await main.getByRole("navigation", { name: "类型分面" }).getByRole("link", { name: /^视角/ }).click();
@@ -109,9 +110,11 @@ for (const width of [1440, 375]) {
         await capture("term-index");
         await main.getByRole("link", { name: "主体性", exact: true }).click();
         await expect(main.getByRole("heading", { level: 1, name: "主体性" })).toBeVisible();
-        await page.goto("/search?q=主体性");
-        await expect(main.getByRole("link", { name: "主体性", exact: true })).toBeVisible();
-        await capture("search-results");
+        if (process.env.E2E_MEILI_HOST) {
+          await page.goto("/search?q=主体性");
+          await expect(main.getByRole("link", { name: "主体性", exact: true })).toBeVisible();
+          await capture("search-results");
+        }
       } finally {
         await db.delete(categories).where(eq(categories.id, fixture.category.id));
         await db.delete(pages).where(inArray(pages.id, [fixture.person.id, fixture.school.id, fixture.affiliation.id]));
@@ -122,6 +125,7 @@ for (const width of [1440, 375]) {
 
 for (const refocus of [false, true]) {
   test(`联想延迟返回遵循读者${refocus ? "重新聚焦" : "关闭"}意图`, async ({ page }) => {
+    test.skip(!process.env.E2E_MEILI_HOST, "Requires the isolated real search service");
     await page.goto("/search");
     const main = page.getByRole("main");
     const input = main.getByRole("textbox", { name: "全站搜索" });
