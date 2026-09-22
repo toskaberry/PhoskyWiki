@@ -9,22 +9,22 @@ import type { RelatedTerm } from "@/lib/recommend";
 export function RelatedTermsPanel({ items }: { items: RelatedTerm[] }) {
   if (items.length === 0) return null;
   return (
-    <section aria-labelledby="related-terms-heading" className="mt-12">
-      <h2 id="related-terms-heading" className="text-xl font-semibold">
+    <section aria-labelledby="related-terms-heading" className="mt-10 scroll-mt-20">
+      <h2 id="related-terms-heading" className="mb-4 text-xl font-semibold">
         相关词条
       </h2>
-      <ul data-testid="related-terms" className="mt-4 grid border-t border-border sm:grid-cols-2 sm:gap-x-8">
+      <ul data-testid="related-terms" className="grid border-t border-border sm:grid-cols-2 sm:gap-x-8">
         {items.map((term) => (
           <li key={term.id} className="min-w-0 border-b border-border py-4">
             <Link href={term.href} className="break-words font-medium hover:underline">
               {term.title}
             </Link>
-            <p className="mt-1.5 text-xs text-muted-foreground">
+            <p className="mt-1.5 font-mono text-xs text-muted-foreground">
               共同引用 {term.commonRefCount} 次
               {term.interestMatchCount > 0 && (
                 <span
                   data-testid="interest-match-badge"
-                  className="ml-2 rounded bg-secondary px-1.5 py-0.5"
+                  className="ml-2 rounded bg-secondary px-1.5 py-0.5 font-sans"
                 >
                   兴趣相关
                 </span>

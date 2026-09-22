@@ -28,6 +28,34 @@ test("全站图谱页：画布渲染、学派图例、缩放拖拽冒烟", async
   await expect(page.getByTestId("graph-canvas")).toBeVisible();
 });
 
+test("全站图谱研究终端：工具栏、图例语义与节点详情层级", async ({ page }) => {
+  await page.goto("/graph");
+
+  // 显式工具栏：搜索定位 + 概要计数 + 缩放/适应画布控件同层可达（#97）
+  const toolbar = page.getByRole("group", { name: "图谱工具栏" });
+  await expect(toolbar).toBeVisible();
+  await expect(toolbar.getByTestId("graph-search")).toBeVisible();
+  await expect(toolbar.getByTestId("graph-summary")).toContainText("个词条");
+  await expect(toolbar.getByTestId("graph-summary")).toContainText("条双链关系");
+  await expect(toolbar.getByRole("button", { name: "缩小图谱" })).toBeVisible();
+  await expect(toolbar.getByRole("button", { name: "放大图谱" })).toBeVisible();
+  await expect(toolbar.getByRole("button", { name: "适应画布" })).toBeVisible();
+
+  // 图例解释视觉编码与学派群落含义：交叠、不表示排他归属（#97）
+  await expect(page.getByText("节点大小 = 双链热度")).toBeVisible();
+  await expect(page.getByText("学派群落可以交叠")).toBeVisible();
+  await expect(page.getByText("不表示概念的排他归属")).toBeVisible();
+
+  // 节点详情保留既有字段：标题、学派视角数、双链热度、视角数与进入词条操作
+  await page.getByTestId("graph-search").fill("主体性");
+  await page.getByRole("option", { name: /主体性/ }).first().click();
+  const details = page.getByTestId("graph-canvas").getByRole("region", { name: "词条关联详情" });
+  await expect(details).toContainText("主体性");
+  await expect(details).toContainText("个视角");
+  await expect(details).toContainText("双链热度");
+  await expect(details.getByRole("button", { name: "进入词条" })).toBeVisible();
+});
+
 test("全站图谱：搜索定位节点后点击画布中心进入词条页", async ({ page }) => {
   await page.goto("/graph");
 
@@ -47,17 +75,25 @@ test("全站图谱：搜索定位节点后点击画布中心进入词条页", as
   await expect(page.getByRole("heading", { level: 1, name: "主体性" })).toBeVisible();
 });
 
-test("词条页局部图谱：邻居网络、跳数切换、邻居链接跳转", async ({ page }) => {
+test("词条页局部图谱：邻居网络、终端工具栏跳数切换、图例与邻居链接跳转", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("link", { name: "主体性", exact: true }).click();
 
   await expect(page.getByRole("heading", { name: "局部图谱" })).toBeVisible();
   await expect(page.getByTestId("graph-canvas")).toBeVisible();
 
-  // 跳数切换 1 → 2：画布重绘不卡死
-  await page.getByRole("button", { name: "2 跳" }).click();
+  // 跳数切换位于终端工具栏内（#97）：1 → 2 跳画布重绘不卡死
+  const toolbar = page.getByRole("group", { name: "图谱工具栏" });
+  await expect(toolbar.getByRole("button", { name: "1 跳" })).toBeVisible();
+  await toolbar.getByRole("button", { name: "2 跳" }).click();
   await expect(page.getByRole("button", { name: "2 跳" })).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByTestId("graph-canvas")).toBeVisible();
+
+  // 局部图例只列当前邻域出现的学派，并保留群落交叠说明
+  const legend = page.getByTestId("local-graph-legend");
+  await expect(legend).toBeVisible();
+  await expect(legend.locator("li").first()).toBeVisible();
+  await expect(page.getByText("不表示概念的排他归属")).toBeVisible();
 
   // 邻居词条链接：点击进入对应词条页
   const neighbor = page

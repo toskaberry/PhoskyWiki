@@ -57,6 +57,19 @@ export default async function TermPage({ params }: Params) {
   const discovery = await getTermDiscovery(page.id, interests);
   if (!discovery) notFound();
 
+  // 继续探索索引（#97）：只链接真实存在的区块，编号为装饰性等宽索引。
+  const exploreNav = (
+    <nav aria-label="继续探索索引" className="flex flex-wrap gap-x-5 gap-y-1 pb-1 text-sm">
+      {discovery.relatedTerms.length > 0 && (
+        <a href="#related-terms-heading" className="py-1"><span aria-hidden="true" className="mr-1.5 font-mono text-xs text-muted-foreground">01</span>相关词条</a>
+      )}
+      <a href="#backlinks-heading" className="py-1"><span aria-hidden="true" className="mr-1.5 font-mono text-xs text-muted-foreground">02</span>反链</a>
+      {localGraph && (
+        <a href="#local-graph-heading" className="py-1"><span aria-hidden="true" className="mr-1.5 font-mono text-xs text-muted-foreground">03</span>局部图谱</a>
+      )}
+    </nav>
+  );
+
   return (
     <PageContainer className="max-w-6xl [overflow-wrap:anywhere]">
       <header className="border-b border-border pb-8">
@@ -126,6 +139,7 @@ export default async function TermPage({ params }: Params) {
             </div>
           </section>
         }
+        exploreNav={exploreNav}
       >
         <BacklinkPanel items={backlinks} />
         {localGraph && <LocalGraph termId={page.id} termTitle={term.title} initialData={localGraph} />}
