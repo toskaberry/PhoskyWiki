@@ -13,6 +13,8 @@ export const dynamic = "force-dynamic";
 type Params = { searchParams: Promise<{ term?: string }> };
 
 export default async function NewPerspectivePage({ searchParams }: Params) {
+  const termParam = Number((await searchParams).term);
+  const next = Number.isSafeInteger(termParam) && termParam > 0 ? `/new/perspective?term=${termParam}` : "/new/perspective";
   const sessionUser = await getSessionUser();
   if (!sessionUser) {
     return (
@@ -23,7 +25,7 @@ export default async function NewPerspectivePage({ searchParams }: Params) {
           title="需要登录才能撰写视角"
           description="视角是站内的原子知识单位；注册成为编者即可参与共建。"
         />
-        <LoginRequired title="登录后开始撰写视角" next="/new/perspective" />
+        <LoginRequired title="登录后开始撰写视角" next={next} />
       </PageContainer>
     );
   }
@@ -31,7 +33,6 @@ export default async function NewPerspectivePage({ searchParams }: Params) {
   const [terms, interpreters, existingPerspectives] = await Promise.all([
     listTerms(), listInterpreters(), listPerspectivePairs(),
   ]);
-  const termParam = Number((await searchParams).term);
   const presetTermId =
     Number.isSafeInteger(termParam) && terms.some((term) => term.id === termParam)
       ? termParam

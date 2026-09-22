@@ -38,7 +38,7 @@ export async function PersonalRecordsSection({ userId, kind, current }: {
 }) {
   const records = await listMyRecords(userId, kind);
   return (
-    <section aria-labelledby="records-heading" className="mt-12 border-t border-border pt-8">
+    <section aria-labelledby="records-heading" className="mt-8 border-t border-border pt-6">
       <h2 id="records-heading" className="text-2xl font-semibold">评论与感想</h2>
       <p className="mt-2 text-sm text-muted-foreground">
         你发表的页面评论、划线感想与回复都在这里；感想可标注公开或仅自己可见，公开感想会进入正文虚线入口。
@@ -60,7 +60,7 @@ export async function PersonalRecordsSection({ userId, kind, current }: {
         ))}
       </nav>
       {records.length === 0 ? (
-        <div className="border-y border-border py-8">
+        <div className="border-y border-border py-5">
           <p className="break-words text-sm leading-7 text-muted-foreground" data-testid="profile-no-records">
             {kind ? `「${filters.find(filter => filter.kind === kind)!.label}」还没有记录。` : "还没有记录。"}
           </p>

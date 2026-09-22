@@ -31,7 +31,11 @@ export function HomeCollage() {
   return (
     <figure className={styles.figure} aria-label="黑格尔、马克思、拉康与文献拼贴">
       <div className={styles.canvas}>
-        <div className={styles.disc} aria-hidden="true">✳</div>
+        <div className={styles.disc} aria-hidden="true">
+          <svg viewBox="0 0 100 100" fill="none" stroke="currentColor" strokeWidth="9">
+            <path d="M50 8v84M8 50h84M20 20l60 60M20 80l60-60" />
+          </svg>
+        </div>
         <div className={styles.document}>
           <Image loading="eager" src="/home-collage/kapital.png" alt="《资本论》第一卷 1867 年扉页" width={1355} height={1984} sizes="(min-width: 1280px) 300px, 180px" />
         </div>

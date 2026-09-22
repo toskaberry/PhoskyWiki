@@ -1,5 +1,6 @@
 import type { SubmissionKind, SubmissionStatus } from "@/db/schema";
-import { Callout } from "@/components/task-page";
+import { Callout, StatusChip } from "@/components/task-page";
+import type { ComponentProps } from "react";
 
 export const kindLabels: Record<SubmissionKind, string> = {
   edit: "编辑视角",
@@ -14,12 +15,15 @@ export const statusLabels: Record<SubmissionStatus, string> = {
   rejected: "已驳回",
 };
 
-// 提交状态徽标的语义配色：待审核用品牌浅底，已受理用中性底，已驳回用错误色。
-export const statusBadgeClass: Record<SubmissionStatus, string> = {
-  pending: "bg-accent text-accent-foreground",
-  approved: "bg-secondary text-secondary-foreground",
-  rejected: "bg-destructive/10 text-destructive",
+const statusTones: Record<SubmissionStatus, ComponentProps<typeof StatusChip>["tone"]> = {
+  pending: "neutral",
+  approved: "accent",
+  rejected: "warning",
 };
+
+export function SubmissionStatusChip({ status }: { status: SubmissionStatus }) {
+  return <StatusChip tone={statusTones[status]}>{statusLabels[status]}</StatusChip>;
+}
 
 // 站内统一的时间戳格式化（lib/format）；在此转出口保持既有相对导入不变
 export { formatWhen } from "@/lib/format";

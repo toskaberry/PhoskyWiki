@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { authClient } from "@/lib/auth-client";
 import { authErrorMessage } from "@/lib/auth-errors";
 
-export function RegisterForm() {
+export function RegisterForm({ redirectTo }: { redirectTo?: string | null }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -34,14 +34,14 @@ export function RegisterForm() {
     if (!response.ok) {
       setError((await response.json()).error); setPending(false); return;
     }
-    window.history.replaceState(null, "", window.location.pathname);
+    window.history.replaceState(null, "", window.location.pathname + window.location.search);
     const { data, error } = await authClient.signIn.email(credentials);
     if (error || !data) {
       setError(`账号已创建，请到登录页登录：${authErrorMessage(error)}`);
       setPending(false);
       return;
     }
-    router.push("/");
+    router.push(redirectTo ?? "/");
     router.refresh();
   }
 

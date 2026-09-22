@@ -57,7 +57,7 @@ async function QueueEntry({ item, catalog }: { item: QueueItem; catalog: EditorC
         </StatusChip>
         {item.staleBase && (
           <span data-testid="stale-badge" className="inline-flex items-center rounded bg-amber-500/15 px-1.5 py-0.5 text-xs leading-5 text-amber-700 dark:text-amber-400">
-            base 过期
+            原稿已有新修订
           </span>
         )}
       </div>
@@ -176,7 +176,7 @@ export default async function ReviewQueuePage() {
         breadcrumb={[{ label: "首页", href: "/" }, { label: "审核队列" }]}
         kicker="管理 · 审核"
         title={`审核队列（${items.length}）`}
-        description="受理票数在提交创建时快照（min(2, 当时的管理员数)）；驳回必填理由，任一驳回即终态。"
+        description="通常需两位管理员受理；提交时仅有一位管理员的，需一位受理。具体人数见每条提案。驳回时须填写理由，驳回后本次审核结束。"
       />
 
       {items.length === 0 ? (

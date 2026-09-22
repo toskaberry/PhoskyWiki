@@ -7,7 +7,7 @@ import { HighlightStyle, syntaxHighlighting, syntaxTree } from "@codemirror/lang
 import { tags } from "@lezer/highlight";
 import { Compartment, EditorSelection, EditorState, Transaction } from "@codemirror/state";
 import { EditorView, keymap, placeholder } from "@codemirror/view";
-import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useId, useMemo, useRef, useState } from "react";
 
 import { WikiContent } from "@/components/wiki-content";
 import { ImageUpload } from "@/components/image-upload";
@@ -84,9 +84,10 @@ const formats = [
   { label: "双链", before: "[[", after: "]]", fallback: "词条名" },
 ];
 
-export function MarkdownEditor({ value, onChange, resolvedWikiLinks }: {
+export function MarkdownEditor({ value, onChange, resolvedWikiLinks, error }: {
   value: string;
   onChange: (value: string) => void;
+  error?: string;
   /** 该页已有的目标身份优先于当前名称目录，包括暂不可用的已解析目标。 */
   resolvedWikiLinks?: [string, WikiLinkTarget][];
 }) {
@@ -94,6 +95,8 @@ export function MarkdownEditor({ value, onChange, resolvedWikiLinks }: {
   const view = useRef<EditorView | null>(null);
   const initialValue = useRef(value);
   const completionConfig = useRef(new Compartment());
+  const validationConfig = useRef(new Compartment());
+  const errorId = useId();
   const [catalog, setCatalog] = useState<EditorCatalog | null>(null);
   const [catalogError, setCatalogError] = useState(false);
   const [reload, setReload] = useState(0);
@@ -119,6 +122,7 @@ export function MarkdownEditor({ value, onChange, resolvedWikiLinks }: {
         extensions: [
           markdown(), history(), syntaxHighlighting(editorHighlightStyle),
           completionConfig.current.of([]),
+          validationConfig.current.of([]),
           keymap.of([...defaultKeymap, ...historyKeymap]),
           EditorView.lineWrapping, editorTheme,
           placeholder("支持 [[词条名]] 与 [[词条名|视角@诠释者]]"),
@@ -132,6 +136,12 @@ export function MarkdownEditor({ value, onChange, resolvedWikiLinks }: {
     view.current = editor;
     return () => { view.current = null; editor.destroy(); };
   }, []);
+
+  useEffect(() => {
+    view.current?.dispatch({ effects: validationConfig.current.reconfigure(
+      error ? EditorView.contentAttributes.of({ "aria-invalid": "true", "aria-describedby": errorId }) : [],
+    ) });
+  }, [error, errorId]);
 
   useEffect(() => {
     const editor = view.current;
@@ -181,6 +191,7 @@ export function MarkdownEditor({ value, onChange, resolvedWikiLinks }: {
       <p className="mt-1 text-sm text-muted-foreground">
         以 Markdown 撰写视角正文；下方即时预览，双链与红链按站内规则解析。
       </p>
+      {error && <p id={errorId} role="alert" data-testid="form-error" className="mt-2 text-sm text-destructive">{error}</p>}
       <div className="mt-4 overflow-hidden rounded-lg border border-border">
         <div role="group" aria-label="Markdown 工具栏" className="flex flex-wrap gap-1 border-b border-border bg-muted/40 p-1">
           {formats.map(({ label, before, after, fallback }) => (

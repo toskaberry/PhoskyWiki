@@ -10,19 +10,13 @@ import { TermMetadataDiff } from "@/components/term-metadata-diff";
 import { formatKeyTexts } from "@/lib/key-texts";
 import { getSessionUser } from "@/lib/session";
 import { getMySubmission } from "@/lib/submission-history";
-import { formatWhen, kindLabels, RejectionReason, statusLabels } from "../../_components";
+import { formatWhen, kindLabels, RejectionReason, SubmissionStatusChip } from "../../_components";
 
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = { title: "提交详情" };
 
 type Props = { params: Promise<{ id: string }> };
-
-const statusTones: Record<string, "accent" | "neutral" | "warning"> = {
-  pending: "neutral",
-  approved: "accent",
-  rejected: "warning",
-};
 
 export default async function SubmissionDetailPage({ params }: Props) {
   const user = await getSessionUser();
@@ -56,7 +50,7 @@ export default async function SubmissionDetailPage({ params }: Props) {
         <div className="flex flex-wrap items-center gap-2 text-sm">
           <StatusChip>{submission.kind === "edit" && submission.title !== null ? "编辑词条信息" : kindLabels[submission.kind]}</StatusChip>
           <span className="min-w-0 break-words text-base font-medium [overflow-wrap:anywhere]">{submission.targetTitle}</span>
-          <StatusChip tone={statusTones[submission.status] ?? "neutral"}>{statusLabels[submission.status]}</StatusChip>
+          <SubmissionStatusChip status={submission.status} />
         </div>
         <p className="mt-2 text-xs text-muted-foreground">
           提交 #{submission.id} · <time dateTime={submission.createdAt.toISOString()}>{formatWhen(submission.createdAt)}</time>

@@ -66,7 +66,7 @@ export const GraphScene = memo(function GraphScene({ data, layout, camera, width
         const touches = edge.source === activeId || edge.target === activeId;
         // 关系层级（#97）：当前节点触边用前景色粗线，其余边退为底纹。
         return <line key={`${edge.source}-${edge.target}`} x1={source.x} y1={source.y} x2={target.x} y2={target.y}
-          stroke={touches ? "var(--foreground)" : "var(--muted-foreground)"} strokeWidth={touches ? 1.8 : 1} opacity={activeId === null ? .075 : touches ? .55 : .02} />;
+          stroke={touches ? "var(--foreground)" : "var(--muted-foreground)"} strokeWidth={touches ? 1.8 : 1} opacity={activeId === null ? .13 : touches ? .55 : .02} />;
       })}</g>
       {data.nodes.map(node => {
         const p = positions.get(node.id);

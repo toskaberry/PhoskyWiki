@@ -3,8 +3,9 @@ import { useState, type FormEvent } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { authPageHref } from "@/lib/auth-redirect";
 
-export function PasswordResetForm() {
+export function PasswordResetForm({ redirectTo }: { redirectTo?: string | null }) {
   const [message, setMessage] = useState("");
   const [done, setDone] = useState(false);
   const [pending, setPending] = useState(false);
@@ -14,7 +15,7 @@ export function PasswordResetForm() {
     try {
       const result = await fetch("/api/access/reset", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ token: String(form.get("token") ?? "").trim() || window.location.hash.slice(1), password: form.get("password") }), cache: "no-store" });
       if (!result.ok) { setMessage((await result.json()).error); return; }
-      window.history.replaceState(null, "", window.location.pathname);
+      window.history.replaceState(null, "", window.location.pathname + window.location.search);
       setDone(true); setMessage("密码已重设，旧会话已失效。请重新登录。");
     } catch { setMessage("网络连接失败，请重试"); }
     finally { setPending(false); }
@@ -28,6 +29,6 @@ export function PasswordResetForm() {
       <Button type="submit" size="lg" disabled={pending} aria-busy={pending} className="h-11 w-full text-base">{pending ? "处理中…" : "重设密码"}</Button>
     </>}
     {done && <p role="status" className="rounded-md border-l-2 border-primary bg-accent px-3 py-2 text-sm text-accent-foreground">{message}</p>}
-    <Link href="/login" className="text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">返回登录</Link>
+    <Link href={authPageHref("login", redirectTo)} className="text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">返回登录</Link>
   </form>;
 }

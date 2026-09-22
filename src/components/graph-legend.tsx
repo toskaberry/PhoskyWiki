@@ -11,7 +11,7 @@ export function GraphLegend({ schools, showUnschooled = true, testId = "graph-le
   testId?: string;
 }) {
   return (
-    <div className="border-t border-border px-3 py-3 sm:px-4">
+    <div className="border-b border-border px-3 py-3 sm:px-4">
       <p className="font-mono text-[11px] leading-relaxed text-muted-foreground">
         编码：节点大小 = 双链热度；多学派词条以扇区呈现各学派成员视角数（可交叉计数）。
       </p>

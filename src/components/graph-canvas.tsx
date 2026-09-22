@@ -16,8 +16,8 @@ export interface GraphCanvasProps {
   ariaLabel: string;
   /** 工具栏前段：全站图谱的搜索定位、局部图谱的跳数切换等页面专属控件。 */
   toolbarLeading?: ReactNode;
-  /** 画布下方的图例／索引层（学派配色与视觉编码说明）。 */
-  footer?: ReactNode;
+  /** 工具栏与画布之间的图例（学派配色与视觉编码说明）。 */
+  legend?: ReactNode;
   ref?: React.Ref<GraphCanvasHandle>;
 }
 export interface GraphCamera { x: number; y: number; scale: number }
@@ -53,7 +53,7 @@ function fitCamera(layout: GraphLayout, width: number, height: number, rootId?: 
   return { x, y, scale: Math.max(MIN_ZOOM, Math.min(1.2, width / (2 * Math.max(x - left, right - x)), height / (2 * Math.max(y - top, bottom - y)))) };
 }
 
-export function GraphCanvas({ data, height, rootId, onNodeClick, onClearSelection, ariaLabel, toolbarLeading, footer, ref }: GraphCanvasProps) {
+export function GraphCanvas({ data, height, rootId, onNodeClick, onClearSelection, ariaLabel, toolbarLeading, legend, ref }: GraphCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const detailRef = useRef<HTMLDivElement>(null);
@@ -215,7 +215,7 @@ export function GraphCanvas({ data, height, rootId, onNodeClick, onClearSelectio
   function zoom(factor: number) { setCamera(c => ({ ...c, scale: Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, c.scale * factor)) })); }
 
   return (
-    // 研究终端外框（#97）：工具栏 → 画布 → 图例，纸面／石墨配色来自 F01 主题令牌。
+    // 研究终端外框（#97）：工具栏 → 图例 → 画布，先说明编码再展示图谱。
     <div className="w-full overflow-hidden rounded-lg border border-border bg-card text-card-foreground">
       <div
         className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border px-3 py-2"
@@ -230,6 +230,7 @@ export function GraphCanvas({ data, height, rootId, onNodeClick, onClearSelectio
           <button type="button" onClick={() => { clearSelection(); setCamera(fitCamera(layout, width, height, rootId)); }} className="inline-flex min-h-11 items-center gap-1.5 rounded border border-border bg-background px-2.5 text-sm text-foreground transition-colors hover:bg-muted"><Maximize aria-hidden="true" className="size-4" />适应画布</button>
         </div>
       </div>
+      {legend}
       <div ref={containerRef} data-testid="graph-canvas" data-located={located ?? undefined} className="relative w-full overflow-hidden" style={{ height }} onPointerLeave={() => {
         travellingToDetail.current = false;
         if (hovered !== null) scheduleHoverDeparture();
@@ -285,7 +286,7 @@ export function GraphCanvas({ data, height, rootId, onNodeClick, onClearSelectio
           </div>
           <div className="px-3 py-2 text-xs leading-relaxed">
             <div className="flex max-w-lg flex-wrap gap-x-3 gap-y-1">
-              {active.schoolAffinities.length ? active.schoolAffinities.map(a => <span key={a.schoolId} className="whitespace-nowrap"><span className="mr-1 inline-block size-2 rounded-full align-middle" style={{ backgroundColor: schools.get(a.schoolId)?.color ?? UNSCHOOLED_COLOR }} />{schools.get(a.schoolId)?.title} · {a.count} 个视角</span>) : <span>{UNSCHOOLED_LABEL}</span>}
+              {active.schoolAffinities.length ? active.schoolAffinities.map(a => <span key={a.schoolId} className="min-w-0 break-words"><span className="mr-1 inline-block size-2 rounded-full align-middle" style={{ backgroundColor: schools.get(a.schoolId)?.color ?? UNSCHOOLED_COLOR }} />{schools.get(a.schoolId)?.title} · {a.count} 个视角</span>) : <span>{UNSCHOOLED_LABEL}</span>}
             </div>
             <p className="mt-1.5 font-mono">双链热度 {active.heat} · {active.perspectiveCount} 个视角</p>
             {active.schoolAffinities.length > 1 && <p className="mt-1 text-muted-foreground">学派成员视角可交叉计数，不表示概念归属比例。</p>}
@@ -293,7 +294,6 @@ export function GraphCanvas({ data, height, rootId, onNodeClick, onClearSelectio
           </div>
         </div>}
       </div>
-      {footer}
     </div>
   );
 }

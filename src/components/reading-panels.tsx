@@ -240,19 +240,26 @@ export function ReadingPanelsArea({ materials, agent }: { materials: ReactNode; 
     // 覆盖层模式下把 Tab 保持在面板内循环（宽屏留白面板是非模态的，不拦截；
     // Esc 关闭由 Provider 挂在 document 上统一处理）。
     if (event.key !== "Tab" || !isOverlay) return;
-    const focusables = areaRef.current?.querySelectorAll<HTMLElement>(
-      "a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])",
-    );
-    if (!focusables || focusables.length === 0) return;
+    const section = areaRef.current?.querySelector<HTMLElement>('section[data-open="true"]');
+    if (!section) return;
+    // 其他面板和收起的 details 仍挂载在 DOM 中，不能参与当前面板的焦点循环。
+    const focusables = Array.from(section.querySelectorAll<HTMLElement>(
+      "a[href], button, input, select, textarea, summary, [tabindex]",
+    )).filter(element => element.tabIndex >= 0 && !element.matches(":disabled") && element.checkVisibility({ visibilityProperty: true }));
+    if (focusables.length === 0) {
+      event.preventDefault();
+      section.focus({ preventScroll: true });
+      return;
+    }
     const first = focusables[0]!;
     const last = focusables[focusables.length - 1]!;
     const active = document.activeElement;
-    if (event.shiftKey && (active === first || active === areaRef.current)) {
+    if (event.shiftKey && (active === first || active === section)) {
       event.preventDefault();
-      last.focus();
-    } else if (!event.shiftKey && active === last) {
+      last.focus({ preventScroll: true });
+    } else if (!event.shiftKey && (active === last || active === section)) {
       event.preventDefault();
-      first.focus();
+      first.focus({ preventScroll: true });
     }
   }, [isOverlay, panels]);
 

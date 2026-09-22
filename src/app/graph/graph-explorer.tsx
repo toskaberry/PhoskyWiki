@@ -100,7 +100,7 @@ export function GraphExplorer({ data }: { data: SiteGraphData }) {
           )}
         </>
       }
-      footer={<GraphLegend schools={data.schools} />}
+      legend={<GraphLegend schools={data.schools} />}
     />
   );
 }

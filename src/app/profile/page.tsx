@@ -12,7 +12,7 @@ import type { PersonalRecordKind } from "@/lib/personal-records";
 import { roleLabels } from "@/lib/roles";
 import { getSessionUser } from "@/lib/session";
 import { listMySubmissions } from "@/lib/submission-history";
-import { formatWhen, kindLabels, RejectionReason, statusBadgeClass, statusLabels } from "./_components";
+import { formatWhen, kindLabels, RejectionReason, statusLabels, SubmissionStatusChip } from "./_components";
 import { PersonalRecordsSection } from "./_records";
 import { hasAdminRole } from "@/lib/roles";
 import { UserManagement } from "./_user-management";
@@ -84,7 +84,7 @@ export default async function ProfilePage({ searchParams }: Props) {
         </nav>
       </header>
 
-      <section aria-labelledby="submission-history-heading" className="mt-12">
+      <section aria-labelledby="submission-history-heading" className="mt-8">
         <h2 id="submission-history-heading" className="text-2xl font-semibold">提交历史</h2>
         <p className="mt-2 text-sm text-muted-foreground">
           你发起的每次提交及其审核状态；驳回理由原文保留在详情页。
@@ -107,7 +107,7 @@ export default async function ProfilePage({ searchParams }: Props) {
         </nav>
 
         {submissions.length === 0 ? (
-          <div className="border-y border-border py-8">
+          <div className="border-y border-border py-5">
             <p className="break-words text-sm leading-7 text-muted-foreground">
               {status ? "这个状态下还没有提交。" : "你还没有提交记录。"}
             </p>
@@ -122,7 +122,7 @@ export default async function ProfilePage({ searchParams }: Props) {
                 <div className="flex flex-wrap items-center gap-2 text-sm">
                   <span className="rounded-sm bg-secondary px-1.5 py-0.5 text-xs text-secondary-foreground">{kindLabels[submission.kind]}</span>
                   <span className="min-w-0 break-words font-medium [overflow-wrap:anywhere]">{submission.targetTitle}</span>
-                  <span className={`rounded-sm px-1.5 py-0.5 text-xs ${statusBadgeClass[submission.status]}`}>{statusLabels[submission.status]}</span>
+                  <SubmissionStatusChip status={submission.status} />
                 </div>
                 <p className="mt-2 text-xs text-muted-foreground">
                   提交于 <time dateTime={submission.createdAt.toISOString()}>{formatWhen(submission.createdAt)}</time>
@@ -140,7 +140,7 @@ export default async function ProfilePage({ searchParams }: Props) {
         )}
       </section>
 
-      <section aria-labelledby="interests-heading" className="mt-12 border-t border-border pt-8">
+      <section aria-labelledby="interests-heading" className="mt-8 border-t border-border pt-6">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h2 id="interests-heading" className="text-2xl font-semibold">兴趣标签</h2>
           <Link
@@ -172,7 +172,7 @@ export default async function ProfilePage({ searchParams }: Props) {
             ))}
           </ul>
         ) : (
-          <div className="border-y border-border py-8">
+          <div className="border-y border-border py-5">
             <p className="break-words text-sm leading-7 text-muted-foreground" data-testid="profile-no-interests">
               还没有设置兴趣——选择关注的诠释者、学派与主题，词条页会按你的兴趣重排。
             </p>
@@ -189,13 +189,13 @@ export default async function ProfilePage({ searchParams }: Props) {
         current={recordsKind ? `/profile?records=${recordsKind}` : "/profile"}
       />
 
-      <section id="notifications" aria-labelledby="notifications-heading" className="mt-12 scroll-mt-36 border-t border-border pt-8">
+      <section id="notifications" aria-labelledby="notifications-heading" className="mt-8 scroll-mt-36 border-t border-border pt-6">
         <h2 id="notifications-heading" className="text-2xl font-semibold">通知</h2>
         <p className="mt-2 text-sm text-muted-foreground">
           {inbox.unreadCount > 0 ? `${inbox.unreadCount} 条未读审核结果。` : "没有未读通知。"}
         </p>
         {inbox.notifications.length === 0 ? (
-          <div className="border-y border-border py-8">
+          <div className="border-y border-border py-5">
             <p className="break-words text-sm leading-7 text-muted-foreground">审核完成后，结果会显示在这里。</p>
           </div>
         ) : (

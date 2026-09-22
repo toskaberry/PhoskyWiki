@@ -345,3 +345,41 @@ test("375px 手机：目录与资料、感想面板为窄屏展开层，感想�
     await cleanupTestContent(source.titles, page.request);
   }
 });
+
+test("覆盖面板的正反向 Tab 只经过当前可见控件，关闭后恢复焦点与阅读位置", async ({ page }) => {
+  test.setTimeout(180_000);
+  const source = await setupPanelPerspective(page);
+  try {
+    for (const width of [1024, 375]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto(source.href);
+      const triggers = page.getByRole("group", { name: "阅读面板入口" });
+      for (const name of ["资料", "感想", "Agent 解读"]) {
+        const trigger = triggers.getByRole("button", { name, exact: true });
+        const panel = page.getByRole("region", { name, exact: true });
+        await trigger.click();
+        await expect(panel).toBeFocused();
+        const scroll = await page.evaluate(() => window.scrollY);
+        // 包含刚打开时焦点位于 section，以及遍历末端后的反向循环。
+        for (const key of ["Shift+Tab", ...Array<string>(12).fill("Tab"), ...Array<string>(12).fill("Shift+Tab")]) {
+          await page.keyboard.press(key);
+          expect(await panel.evaluate(element => element.contains(document.activeElement))).toBe(true);
+          expect(await page.evaluate(() => window.scrollY)).toBe(scroll);
+        }
+        if (name === "Agent 解读") {
+          await panel.locator("summary").click();
+          await panel.getByLabel("API key").fill("focus-regression");
+          await panel.getByRole("button", { name: "生成阅读路径" }).focus();
+          await page.keyboard.press("Tab");
+          await expect(panel.getByRole("button", { name: "关闭Agent 解读面板" })).toBeFocused();
+        }
+        await page.keyboard.press("Escape");
+        await expect(panel).toBeHidden();
+        await expect(trigger).toBeFocused();
+        expect(await page.evaluate(() => window.scrollY)).toBe(scroll);
+      }
+    }
+  } finally {
+    await cleanupTestContent(source.titles, page.request);
+  }
+});

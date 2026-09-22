@@ -208,6 +208,10 @@
   overflow-wrap: anywhere;
 }
 
+.wiki-content strong {
+  font-weight: 700;
+}
+
 .wiki-content :where(h1, h2, h3, h4, h5, h6, cite, figcaption),
 .reading-meta {
   font-family: var(--font-ui);

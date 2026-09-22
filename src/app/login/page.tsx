@@ -2,24 +2,18 @@ import Link from "next/link";
 import type { Metadata } from "next";
 
 import { LoginForm } from "@/components/login-form";
+import { authPageHref, safeAuthRedirect } from "@/lib/auth-redirect";
 
 export const metadata: Metadata = {
   title: "登录",
 };
-
-/** 登录后的回跳目标：只接受站内相对路径，防开放重定向（"//" 协议相对 URL 也拒）。 */
-function safeRedirect(raw: string | string[] | undefined): string | null {
-  const value = Array.isArray(raw) ? raw[0] : raw;
-  if (value === undefined || !value.startsWith("/") || value.startsWith("//")) return null;
-  return value;
-}
 
 export default async function LoginPage({
   searchParams,
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const redirectTo = safeRedirect((await searchParams).redirect);
+  const redirectTo = safeAuthRedirect((await searchParams).redirect);
   return (
     <main className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center px-4 py-16 sm:px-6">
       <header className="border-t-2 border-foreground pt-6">
@@ -36,12 +30,12 @@ export default async function LoginPage({
       </header>
       <LoginForm redirectTo={redirectTo} />
       <div className="mt-8 flex flex-col gap-2 border-t border-border pt-4 text-sm">
-        <Link href="/reset-password" className="text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">
+        <Link href={authPageHref("reset-password", redirectTo)} className="text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">
           忘记密码？联系管理员恢复
         </Link>
         <p className="text-muted-foreground">
           还没有账号？{" "}
-          <Link href="/register" className="text-foreground underline-offset-4 hover:underline">
+          <Link href={authPageHref("register", redirectTo)} className="text-foreground underline-offset-4 hover:underline">
             注册
           </Link>
         </p>

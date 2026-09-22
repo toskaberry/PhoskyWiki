@@ -16,10 +16,10 @@
   border-radius: 50%;
   background: var(--primary);
   color: var(--primary-foreground);
-  font-size: 150px;
-  line-height: 170px;
-  text-align: center;
+  display: grid;
+  place-items: center;
 }
+.disc svg { width: 80%; height: 80%; }
 .document {
   position: absolute;
   width: 45%;
@@ -82,7 +82,7 @@
 @media (min-width: 1280px) {
   .canvas { height: 475px; }
   .document { width: 55%; top: 5%; left: 7%; }
-  .disc { width: 215px; height: 215px; font-size: 185px; line-height: 215px; top: 22px; right: -25px; }
+  .disc { width: 215px; height: 215px; top: 22px; right: -25px; }
   .portraits { inset: 185px 12px 45px; gap: 8px; }
   .crop { height: 202px; }
   .hegel { transform: translateY(-35px); }

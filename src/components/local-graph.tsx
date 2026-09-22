@@ -116,7 +116,7 @@ export function LocalGraph({
                 )}
               </div>
             }
-            footer={
+            legend={
               <GraphLegend
                 schools={presentSchools}
                 showUnschooled={hasUnschooled}

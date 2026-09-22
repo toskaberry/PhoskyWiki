@@ -2,6 +2,7 @@ import type { ComponentProps, ReactNode } from "react";
 import Link from "next/link";
 
 import { cn } from "@/lib/utils";
+import { authPageHref } from "@/lib/auth-redirect";
 
 /**
  * F11 共享任务页骨架：创建／编辑／审核／修订／管理页面统一的
@@ -147,7 +148,6 @@ export function LoginRequired({
   description?: ReactNode;
   next?: string;
 }) {
-  const suffix = next ? `?next=${encodeURIComponent(next)}` : "";
   return (
     <Callout tone="neutral" className="mt-8 max-w-xl">
       <p className="font-medium">{title}</p>
@@ -156,13 +156,13 @@ export function LoginRequired({
       )}
       <div className="mt-4 flex flex-wrap gap-3">
         <Link
-          href={`/login${suffix}`}
+          href={authPageHref("login", next)}
           className="inline-flex h-9 items-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/80"
         >
           登录
         </Link>
         <Link
-          href={`/register${suffix}`}
+          href={authPageHref("register", next)}
           className="inline-flex h-9 items-center rounded-lg border border-input bg-background px-4 text-sm font-medium transition-colors hover:bg-muted"
         >
           注册
