@@ -55,7 +55,7 @@ export default async function SubmissionDetailPage({ params }: Props) {
       <div className="mt-8 border-b border-border pb-6">
         <div className="flex flex-wrap items-center gap-2 text-sm">
           <StatusChip>{submission.kind === "edit" && submission.title !== null ? "编辑词条信息" : kindLabels[submission.kind]}</StatusChip>
-          <span className="min-w-0 break-words text-base font-medium">{submission.targetTitle}</span>
+          <span className="min-w-0 break-words text-base font-medium [overflow-wrap:anywhere]">{submission.targetTitle}</span>
           <StatusChip tone={statusTones[submission.status] ?? "neutral"}>{statusLabels[submission.status]}</StatusChip>
         </div>
         <p className="mt-2 text-xs text-muted-foreground">
@@ -93,7 +93,7 @@ export default async function SubmissionDetailPage({ params }: Props) {
           {submission.baseHidden ? "页面已不可见，历史正文不予展示；下方保留你提交的提案。" : submission.kind === "edit" ? "对比开始编辑时的修订与本次提案。" : "新建内容以空白为起点对比。"}
         </p>
         {submission.baseHidden
-          ? <pre className="whitespace-pre-wrap break-words rounded-md border border-border bg-muted/40 p-3 text-sm">{proposedText}</pre>
+          ? <pre className="whitespace-pre-wrap break-words rounded-md border border-border bg-muted/40 p-3 text-sm [overflow-wrap:anywhere]">{proposedText}</pre>
           : submission.baseSnapshot
             ? <TermMetadataDiff from={submission.baseSnapshot} to={{ ...submission.baseSnapshot, title: submission.title!, summary: submission.summary ?? "", ...(submission.baseSnapshot.type === "term" ? { aliases: submission.aliases } : {}), keyTexts: submission.keyTexts ?? submission.baseSnapshot.keyTexts }} />
             : <ContentDiff oldText={submission.baseContent ?? ""} newText={proposedText} />}

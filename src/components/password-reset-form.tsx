@@ -19,14 +19,15 @@ export function PasswordResetForm() {
     } catch { setMessage("网络连接失败，请重试"); }
     finally { setPending(false); }
   }
-  return <form onSubmit={submit} className="flex flex-col gap-5">
-    <p>忘记密码请联系管理员核实身份，取得一次性恢复链接。此过程不代表邮箱已验证。</p>
+  return <form onSubmit={submit} className="mt-8 flex flex-col gap-5" aria-busy={pending}>
+    <p className="text-sm leading-7 text-muted-foreground">忘记密码请联系管理员核实身份，取得一次性恢复链接。此过程不代表邮箱已验证。</p>
     {!done && <>
-      <label>恢复码<Input name="token" type="password" autoComplete="off" /></label>
-      <label>新密码（8–128 位）<Input name="password" type="password" minLength={8} maxLength={128} required autoComplete="new-password" /></label>
-      <Button disabled={pending}>{pending ? "处理中…" : "重设密码"}</Button>
+      <label className="flex flex-col gap-2 text-sm font-medium">恢复码<Input name="token" type="password" autoComplete="off" className="h-11" disabled={pending} /></label>
+      <label className="flex flex-col gap-2 text-sm font-medium">新密码（8–128 位）<Input name="password" type="password" minLength={8} maxLength={128} required autoComplete="new-password" className="h-11" disabled={pending} /></label>
+      {message && <p role="alert" className="rounded-md border-l-2 border-destructive bg-destructive/10 px-3 py-2 text-sm text-destructive">{message}</p>}
+      <Button type="submit" size="lg" disabled={pending} aria-busy={pending} className="h-11 w-full text-base">{pending ? "处理中…" : "重设密码"}</Button>
     </>}
-    {message && <p role="status">{message}</p>}
-    <Link href="/login">返回登录</Link>
+    {done && <p role="status" className="rounded-md border-l-2 border-primary bg-accent px-3 py-2 text-sm text-accent-foreground">{message}</p>}
+    <Link href="/login" className="text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">返回登录</Link>
   </form>;
 }

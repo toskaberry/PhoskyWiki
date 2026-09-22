@@ -33,25 +33,27 @@ export function PersonalRecordActions({ record, returnTo }: { record: PersonalRe
 
   const path = record.kind === "reply" ? `/api/thought-replies/${record.id}` : `/api/thoughts/${record.id}`;
   const scoped = `${path}?returnTo=${encodeURIComponent(returnTo)}`;
-  return <span className="flex items-center gap-3">
-    {error && <span role="alert" className="text-xs text-destructive">{error}</span>}
+  return <span className="flex flex-wrap items-center gap-3">
+    {error && <span role="alert" className="text-sm text-destructive">{error}</span>}
     {record.kind === "thought" && record.status === "available" && <button
       type="button"
       disabled={pending}
+      aria-busy={pending}
       onClick={() => void mutate(path, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ visibility: record.visibility === "public" ? "private" : "public", returnTo }),
       })}
-      className="text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline disabled:opacity-50"
+      className="inline-flex min-h-11 items-center text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline disabled:opacity-50"
     >
       {record.visibility === "public" ? "转为仅自己可见" : "设为公开"}
     </button>}
     <button
       type="button"
       disabled={pending}
+      aria-busy={pending}
       onClick={() => void mutate(record.kind === "comment" ? `/api/comments/${record.id}?returnTo=${encodeURIComponent(returnTo)}` : scoped, { method: "DELETE" })}
-      className="text-xs text-muted-foreground underline-offset-4 hover:text-destructive hover:underline disabled:opacity-50"
+      className="inline-flex min-h-11 items-center text-sm text-muted-foreground underline-offset-4 hover:text-destructive hover:underline disabled:opacity-50"
     >
       {pending ? "处理中…" : "删除"}
     </button>

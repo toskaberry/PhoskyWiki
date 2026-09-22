@@ -109,7 +109,7 @@ export function InterestTagManager({
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-10">
       <ChipGroup
         legend="诠释者"
         hint="所选诠释者的视角在词条下排前"
@@ -133,9 +133,9 @@ export function InterestTagManager({
       />
 
       {isAccount ? (
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-2 border-t border-border pt-6">
           <div className="flex flex-wrap items-center gap-3">
-            <Button type="button" onClick={saveToAccount} disabled={pending}>
+            <Button type="button" onClick={saveToAccount} disabled={pending} aria-busy={pending}>
               {pending ? "保存中…" : "保存到账号"}
             </Button>
             {savedAt && (
@@ -144,7 +144,7 @@ export function InterestTagManager({
               </span>
             )}
             {error && (
-              <span data-testid="interest-error" className="text-sm text-destructive">
+              <span data-testid="interest-error" role="alert" className="text-sm text-destructive">
                 {error}
               </span>
             )}
@@ -156,7 +156,7 @@ export function InterestTagManager({
           )}
         </div>
       ) : (
-        <div>
+        <div className="border-t border-border pt-6">
           <p data-testid="guest-storage-hint" className="text-sm text-muted-foreground">
             改动即保存在本浏览器；
             <Link href="/login" className="text-foreground underline-offset-4 hover:underline">
@@ -164,7 +164,7 @@ export function InterestTagManager({
             </Link>
             后可同步到账号。
           </p>
-          {error && <p role="status" className="text-sm text-destructive">{error}</p>}
+          {error && <p role="status" className="mt-2 text-sm text-destructive">{error}</p>}
         </div>
       )}
     </div>
@@ -186,30 +186,30 @@ function ChipGroup({
 }) {
   return (
     <fieldset>
-      <legend className="text-sm font-medium">
+      <legend className="text-base font-semibold">
         {legend}
-        <span className="ml-2 font-normal text-muted-foreground">{hint}</span>
+        <span className="ml-3 font-normal text-muted-foreground">{hint}</span>
       </legend>
       {options.length === 0 ? (
         <p className="mt-3 text-sm text-muted-foreground">暂无可选项。</p>
       ) : (
-        <ul className="mt-3 flex flex-wrap gap-2">
+        <ul className="mt-4 flex flex-wrap gap-2">
           {options.map((option) => {
             const checked = selectedIds.includes(option.id);
             return (
               <li key={option.id}>
                 <label
-                  className={`inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm transition-colors ${
+                  className={`inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-full border px-4 py-2 text-sm transition-colors ${
                     checked
-                      ? "border-transparent bg-secondary text-secondary-foreground"
-                      : "border-border text-muted-foreground hover:bg-muted hover:text-foreground"
+                      ? "border-foreground bg-foreground text-background"
+                      : "border-border bg-card text-muted-foreground hover:border-input hover:text-foreground"
                   }`}
                 >
                   <input
                     type="checkbox"
                     checked={checked}
                     onChange={() => onToggle(option.id)}
-                    className="h-3.5 w-3.5 accent-foreground"
+                    className={`h-3.5 w-3.5 ${checked ? "accent-background" : "accent-foreground"}`}
                   />
                   {option.label}
                   {option.note && <span className="text-xs opacity-70">（{option.note}）</span>}
