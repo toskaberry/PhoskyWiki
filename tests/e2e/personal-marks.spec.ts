@@ -6,8 +6,9 @@ import "dotenv/config";
 import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { expect, test, type Page } from "./fixtures";
+import { toggleTheme } from "./navigation-fixture";
 import { getDb } from "../../src/db";
-import { pages, personalMarks, user, userMarkStyle } from "../../src/db/schema";
+import { pages, passageThoughts, personalMarks, user, userMarkStyle } from "../../src/db/schema";
 import { fixtureRegister } from "./auth-fixture";
 
 /** 「拉康论主体性」视角（种子里固定存在）的页面行与直达地址。 */
@@ -74,6 +75,22 @@ async function cleanupMarks() {
   const { id: pageId } = await lacanPerspective();
   await getDb().delete(personalMarks).where(and(eq(personalMarks.pageId, pageId), eq(personalMarks.userId, await adminId())));
   await getDb().delete(userMarkStyle).where(eq(userMarkStyle.userId, await adminId()));
+}
+
+/** 测试自愈：种子管理员在本视角上发表的感想清空（叠加场景自造的夹具）。 */
+async function cleanupAdminThoughts() {
+  const { id: pageId } = await lacanPerspective();
+  await getDb().delete(passageThoughts).where(and(eq(passageThoughts.pageId, pageId), eq(passageThoughts.authorId, await adminId())));
+}
+
+/** 选中已选文后经浮条发表感想（与 passage-thoughts.spec 的 writeThought 同流程）。 */
+async function writeThoughtOnSelection(page: Page, text: string) {
+  const write = page.getByRole("button", { name: "写想法", exact: true });
+  await write.waitFor({ state: "visible" });
+  await write.click();
+  await page.locator("#thought-draft").fill(text);
+  await page.getByRole("button", { name: "发布想法", exact: true }).click();
+  await expect(page.locator("#thought-draft")).toHaveCount(0);
 }
 
 test("游客可选文出浮条：尖角指向选区，复制可用，样式按钮引导登录带回跳", async ({ page }) => {
@@ -264,4 +281,167 @@ test("移动端只读：选区不出现浮条", async ({ page }) => {
   await selectText(page, "无意识像语言一样被结构");
   await expect(toolbar(page)).toHaveCount(0);
   await expect(page.locator(".pw-selection-toolbar")).toHaveCount(0);
+});
+
+// #96 叠加验收：可跳转双链、红链与三种个人划线、公共／本人感想虚线同现于一段正文，
+// 在明暗两主题下各自可辨（纵向阶梯 + 颜色区分），且选文复制、悬停预览、点击跳转、
+// 刷新持久化与移动端只读边界不因分层样式失效。断言可见性与行为，不绑像素值。
+test("双链、红链与三种划线、感想虚线叠加分层可辨：明暗两主题下选文、复制、跳转与持久化不受影响", async ({ page, browser }) => {
+  test.skip(!process.env.SEED_ADMIN_PASSWORD, "需要种子管理员密码");
+  test.setTimeout(180_000);
+  const { id: pageId, href } = await lacanPerspective();
+  const otherEmail = `overlap-${randomUUID()}@example.com`;
+  const otherContext = await browser.newContext();
+  let otherUserId = "";
+  try {
+    // 另一位读者在含 [[意识形态]] 双链的句子上发表公开感想：该句出现公共感想灰虚线
+    expect((await fixtureRegister(otherContext.request, { data: { name: "叠加读者", email: otherEmail, password: "overlap-password123" } })).ok()).toBe(true);
+    const [otherAccount] = await getDb().select({ id: user.id }).from(user).where(eq(user.email, otherEmail));
+    otherUserId = otherAccount.id;
+    const other = await otherContext.newPage();
+    await other.goto(href);
+    await selectText(other, "词条下阿尔都塞的视角");
+    await writeThoughtOnSelection(other, "公共感想：镜像式误认的参照。");
+    await expect(other.locator(".pw-thought-marker").filter({ hasText: "可参照" }).first()).toBeVisible();
+    await otherContext.close();
+
+    // 管理员三种个人划线分别压过：可跳转双链（意识形态）、可跳转双链（异化）、红链（镜像阶段）；
+    // 再在含红链的句子上写自己的想法：本人红虚线与红链缺口线同句叠加
+    await login(page);
+    await openPerspective(page);
+    await selectText(page, "参照意识形态词条下");
+    await toolbar(page).getByRole("button", { name: /马克笔划线/ }).click();
+    await expect(page.locator("a.wiki-link .pw-mark--highlight").first()).toHaveText("意识形态");
+    await selectText(page, "对象颠倒的问题亦见异化");
+    await toolbar(page).getByRole("button", { name: /直线划线/ }).click();
+    await expect(page.locator("a.wiki-link .pw-mark--underline").first()).toHaveText("异化");
+    await selectText(page, "若想看镜像阶段作为");
+    await toolbar(page).getByRole("button", { name: /波浪线划线/ }).click();
+    await expect(page.locator(".wiki-link--red .pw-mark--squiggle").first()).toHaveText("镜像阶段");
+    await selectText(page, "同样尚待撰写的还有德里达对拉康的解构式读法");
+    await writeThoughtOnSelection(page, "我的感想：等待解构式读法。");
+    await expect(page.locator(".pw-thought-marker[data-own=\"true\"]").filter({ hasText: "德里达" }).first()).toBeVisible();
+
+    const link = page.locator(".wiki-content").getByRole("link", { name: "意识形态", exact: true });
+    const yihua = page.locator(".wiki-content").getByRole("link", { name: "异化", exact: true });
+    const publicMarker = page.locator(".pw-thought-marker[data-own=\"false\"]").filter({ hasText: "阿尔都塞的视角" }).first();
+    const ownMarker = page.locator(".pw-thought-marker[data-own=\"true\"]").filter({ hasText: "德里达" }).first();
+    const redLink = page.locator(".wiki-link--red").filter({ hasText: "镜像阶段" }).first();
+    await expect(publicMarker).toHaveAttribute("data-own", "false");
+    expect(await redLink.evaluate(element => element.tagName)).toBe("SPAN"); // 红链不可点击，不是导航替身
+
+    await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+    for (const theme of ["light", "dark"] as const) {
+      if (theme === "dark") await toggleTheme(page);
+      await expect(page.locator("html")).toHaveCSS("color-scheme", theme);
+
+      // 纵向阶梯：链接下划线最贴字 → 个人划线居中 → 感想虚线最远（同一 18px 正文内可比）
+      const offsets = await page.evaluate(() => {
+        const read = (selector: string) => {
+          const element = document.querySelector(selector);
+          return element ? parseFloat(getComputedStyle(element).textUnderlineOffset) : null;
+        };
+        return {
+          link: read(".wiki-content a.wiki-link"),
+          underline: read("a.wiki-link .pw-mark--underline"),
+          squiggle: read(".wiki-link--red .pw-mark--squiggle"),
+          marker: read("a.wiki-link .pw-thought-marker"),
+        };
+      });
+      expect(offsets.link, `${theme} 链接下划线应最贴字`).toBeLessThan(offsets.underline!);
+      expect(offsets.underline, `${theme} 划线应低于链接下划线`).toBeLessThan(offsets.marker!);
+      expect(offsets.squiggle!, `${theme} 波浪线应低于链接下划线`).toBeGreaterThan(offsets.link!);
+
+      // 颜色区分：链接色、划线色、公共虚线色互不相同；虚线保持虚线、红链保持缺口边框
+      const colors = await page.evaluate(() => {
+        const read = (selector: string, prop: "color" | "textDecorationColor") => {
+          const element = document.querySelector(selector);
+          return element ? getComputedStyle(element)[prop] : null;
+        };
+        return {
+          link: read(".wiki-content a.wiki-link", "color"),
+          underline: read("a.wiki-link .pw-mark--underline", "textDecorationColor"),
+          marker: read("a.wiki-link .pw-thought-marker", "textDecorationColor"),
+          redText: read(".wiki-link--red", "color"),
+        };
+      });
+      expect(new Set([colors.link, colors.underline, colors.marker]).size, `${theme} 三层线色应互不相同`).toBe(3);
+      expect(colors.link, `${theme} 链接应保持主题蓝`).not.toBe(colors.redText);
+      await expect(publicMarker).toHaveCSS("text-decoration-style", "dashed");
+      await expect(redLink).toHaveCSS("border-bottom-style", "dashed");
+
+      // 高光上的双链仍读得出是链接：与半透明高光混合后的底色对比 ≥ 4.5:1
+      const ratio = await page.evaluate(() => {
+        const context = document.createElement("canvas").getContext("2d")!;
+        const rgba = (color: string) => {
+          context.fillStyle = "#000000";
+          context.fillStyle = color;
+          context.fillRect(0, 0, 1, 1);
+          const { data } = context.getImageData(0, 0, 1, 1);
+          return [data[0], data[1], data[2], data[3] / 255];
+        };
+        const luminance = (rgb: number[]) => {
+          const channel = (value: number) => {
+            const c = value / 255;
+            return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+          };
+          return 0.2126 * channel(rgb[0]!) + 0.7152 * channel(rgb[1]!) + 0.0722 * channel(rgb[2]!);
+        };
+        const mark = document.querySelector("a.wiki-link .pw-mark--highlight")!;
+        const linkElement = mark.closest("a")!;
+        const markBackground = rgba(getComputedStyle(mark).backgroundColor);
+        const pageBackground = rgba(getComputedStyle(document.body).backgroundColor);
+        const alpha = markBackground[3]!;
+        const blended = [0, 1, 2].map(index => markBackground[index]! * alpha + pageBackground[index]! * (1 - alpha));
+        const foreground = rgba(getComputedStyle(linkElement).color).slice(0, 3);
+        const first = luminance(foreground as number[]);
+        const second = luminance(blended as number[]);
+        return (Math.max(first, second) + 0.05) / (Math.min(first, second) + 0.05);
+      });
+      expect(ratio, `${theme} 高光上的双链对比度`).toBeGreaterThanOrEqual(4.5);
+
+      // 悬停：链接出下划线的同时划线保留自己的线型；感想虚线不挡双链预览
+      await yihua.hover();
+      await expect(yihua).toHaveCSS("text-decoration-line", /underline/);
+      await expect(page.locator("a.wiki-link .pw-mark--underline").first()).toHaveCSS("text-decoration-style", "solid");
+      await page.mouse.move(4, 4);
+      await link.hover();
+      await expect(page.getByRole("group", { name: "双链预览" })).toBeVisible({ timeout: 3_000 });
+      await page.mouse.move(4, 4);
+
+      // 叠加选文复制：选区横跨链接、划线与虚线，复制到的仍是所选文字
+      await selectText(page, "参照意识形态词条下");
+      await toolbar(page).getByRole("button", { name: "复制所选文字" }).click();
+      expect(await page.evaluate(() => navigator.clipboard.readText())).toBe("参照意识形态词条下");
+    }
+
+    // 点击压在高光与公共虚线下的双链：链接优先导航
+    await link.click();
+    await expect(page).toHaveURL(/\/term\//);
+    await expect(page.getByRole("heading", { level: 1, name: "意识形态" })).toBeVisible();
+
+    // 刷新后标记与两种虚线仍在原位（保存后重载定位不因分层失效）
+    await page.goto(href);
+    await page.reload();
+    await expect(page.locator("a.wiki-link .pw-mark--highlight").first()).toHaveText("意识形态");
+    await expect(page.locator("a.wiki-link .pw-mark--underline").first()).toHaveText("异化");
+    await expect(page.locator(".wiki-link--red .pw-mark--squiggle").first()).toHaveText("镜像阶段");
+    await expect(publicMarker).toBeVisible();
+    await expect(ownMarker).toBeVisible();
+
+    // 移动端：叠加装饰仍可读，但保持既有只读边界（不出浮条）
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(publicMarker).toBeVisible();
+    await expect(ownMarker).toBeVisible();
+    await selectText(page, "参照意识形态词条下");
+    await expect(toolbar(page)).toHaveCount(0);
+  } finally {
+    if (otherUserId) {
+      await getDb().delete(passageThoughts).where(and(eq(passageThoughts.pageId, pageId), eq(passageThoughts.authorId, otherUserId)));
+    }
+    await otherContext.close();
+    await cleanupAdminThoughts();
+    await cleanupMarks();
+    await getDb().delete(user).where(eq(user.email, otherEmail));
+  }
 });

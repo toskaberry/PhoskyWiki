@@ -434,6 +434,13 @@ test("个人标记与双链重叠：三种样式下点击仍优先跳转，标�
     await selectText(page, "参照意识形态词条下");
     await toolbar.getByRole("button", { name: /波浪线划线/ }).click();
     await expect(page.locator(".pw-mark--squiggle").filter({ hasText: "意识形态" })).toBeVisible();
+    // 悬停时链接出下划线，波浪线保留自己的线型与颜色（#96 叠加分层可辨）
+    const squiggled = page.locator(".wiki-content").getByRole("link", { name: "意识形态", exact: true });
+    await squiggled.hover();
+    await expect(squiggled).toHaveCSS("text-decoration-line", /underline/);
+    const squiggle = page.locator(".pw-mark--squiggle").filter({ hasText: "意识形态" }).first();
+    await expect(squiggle).toHaveCSS("text-decoration-style", "wavy");
+    expect(await squiggle.evaluate(el => getComputedStyle(el).textDecorationColor)).not.toBe(await squiggled.evaluate(el => getComputedStyle(el).color));
     await page.locator(".wiki-content").getByRole("link", { name: "意识形态", exact: true }).click();
     await expect(page).toHaveURL(/\/term\//);
   } finally {
