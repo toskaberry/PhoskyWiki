@@ -13,6 +13,13 @@ export const statusLabels: Record<SubmissionStatus, string> = {
   rejected: "已驳回",
 };
 
+// 提交状态徽标的语义配色：待审核用品牌浅底，已受理用中性底，已驳回用错误色。
+export const statusBadgeClass: Record<SubmissionStatus, string> = {
+  pending: "bg-accent text-accent-foreground",
+  approved: "bg-secondary text-secondary-foreground",
+  rejected: "bg-destructive/10 text-destructive",
+};
+
 // 站内统一的时间戳格式化（lib/format）；在此转出口保持既有相对导入不变
 export { formatWhen } from "@/lib/format";
 
@@ -20,9 +27,9 @@ export function RejectionReason({ reason }: { reason: string | null }) {
   if (reason === null) return null;
 
   return (
-    <div className="mt-3 rounded-md border border-border bg-muted/40 p-3 text-sm">
+    <div className="mt-3 border-l-2 border-destructive/50 bg-muted/40 p-3 text-sm">
       <p className="font-medium">驳回理由</p>
-      <p className="mt-1 whitespace-pre-wrap break-words">{reason}</p>
+      <p className="mt-1 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{reason}</p>
     </div>
   );
 }
