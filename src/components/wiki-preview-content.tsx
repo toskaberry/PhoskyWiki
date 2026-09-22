@@ -122,7 +122,7 @@ export function WikiPreviewContent({ html }: { html: string }) {
       return link && root.contains(link) ? link : null;
     };
     const onPointerOver = (event: PointerEvent) => {
-      if (event.pointerType !== "mouse" || event.buttons !== 0) return;
+      if ((event.pointerType !== "mouse" && event.pointerType !== "pen") || event.buttons !== 0) return;
       const link = findLink(event.target);
       if (link) activate(link, 650);
       if (within(event.target)) {
@@ -134,6 +134,11 @@ export function WikiPreviewContent({ html }: { html: string }) {
       if (!within(event.target) || within(event.relatedTarget)) return;
       pointerInside = false;
       scheduleClose();
+    };
+    // 开始选文或点击卡片外部时立即收起，避免遮挡选区工具条；卡内导航不受影响。
+    const onPointerDown = (event: PointerEvent) => {
+      if (event.target instanceof Node && cardRef.current?.contains(event.target)) return;
+      close();
     };
     const onFocusIn = (event: FocusEvent) => {
       const link = findLink(event.target);
@@ -176,6 +181,7 @@ export function WikiPreviewContent({ html }: { html: string }) {
     };
     document.addEventListener("pointerover", onPointerOver);
     document.addEventListener("pointerout", onPointerOut);
+    document.addEventListener("pointerdown", onPointerDown);
     document.addEventListener("focusin", onFocusIn);
     document.addEventListener("focusout", onFocusOut);
     document.addEventListener("keydown", onKeyDown);
@@ -185,6 +191,7 @@ export function WikiPreviewContent({ html }: { html: string }) {
       close();
       document.removeEventListener("pointerover", onPointerOver);
       document.removeEventListener("pointerout", onPointerOut);
+      document.removeEventListener("pointerdown", onPointerDown);
       document.removeEventListener("focusin", onFocusIn);
       document.removeEventListener("focusout", onFocusOut);
       document.removeEventListener("keydown", onKeyDown);

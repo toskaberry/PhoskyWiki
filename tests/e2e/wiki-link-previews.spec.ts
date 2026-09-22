@@ -40,7 +40,7 @@ async function openLacan(page: Page) {
  *  重载后 React 尚未水合时首批悬停事件会错过；重悬停前先移开指针，
  *  否则 hover() 因指针已在链接上而不再派发事件。 */
 async function hoverUntilCard(page: Page, link: Locator) {
-  const card = page.getByRole("group", { name: "双链预览" });
+  const card = page.getByRole("dialog", { name: "双链预览" });
   for (let attempt = 0; ; attempt++) {
     if (attempt > 0) await page.mouse.move(4, 4);
     await link.hover();
@@ -51,7 +51,7 @@ async function hoverUntilCard(page: Page, link: Locator) {
       if (attempt >= 2) throw error;
     }
   }
-  await expect(card.getByText("加载中…")).toHaveCount(0);
+  await expect(card.getByText("正在加载预览…")).toHaveCount(0);
   return card;
 }
 
@@ -116,14 +116,17 @@ async function expectCompactCard(page: Page, card: Locator) {
   expect(box!.x).toBeGreaterThanOrEqual(-1);
   expect(box!.y).toBeGreaterThanOrEqual(-1);
   expect(box!.x + box!.width).toBeLessThanOrEqual(page.viewportSize()!.width + 1);
-  const overflow = await card.evaluate(el => getComputedStyle(el).overflowY);
-  expect(overflow).toBe("hidden");
+  expect(box!.y + box!.height).toBeLessThanOrEqual(page.viewportSize()!.height + 1);
+  expect(await card.evaluate(root => [root, ...root.querySelectorAll("*")].some(node => {
+    const style = getComputedStyle(node);
+    return /(auto|scroll)/.test(style.overflowY) && node.scrollHeight > node.clientHeight;
+  }))).toBe(false);
 }
 
 test("普通词条双链：短暂划过不弹卡，停留后出简介与视角入口，查看全部可达", async ({ page }) => {
   await openLacan(page);
   const link = page.locator(".wiki-content").getByRole("link", { name: "意识形态", exact: true });
-  const card = page.getByRole("group", { name: "双链预览" });
+  const card = page.getByRole("dialog", { name: "双链预览" });
 
   // F01 回归（未悬停）：蓝色、默认无下划线、不加粗
   const styles = await link.evaluate(el => ({
@@ -145,16 +148,16 @@ test("普通词条双链：短暂划过不弹卡，停留后出简介与视角�
 
   // 悬停（鼠标仍在链接上）出现下划线；词条名 + 已有简介 + 视角入口 + 查看全部
   await expect(link).toHaveCSS("text-decoration-line", /underline/);
-  await expect(card.getByText("加载中…")).toHaveCount(0);
+  await expect(card.getByText("正在加载预览…")).toHaveCount(0);
   await expect(card.getByText("意识形态", { exact: true })).toBeVisible();
   await expect(card).toContainText("意义系统还是虚假意识");
-  const entries = card.locator("a").filter({ hasNotText: "查看全部" });
+  const entries = card.locator('a[href^="/perspective/"]');
   expect(await entries.count()).toBeLessThanOrEqual(2);
-  await expect(card.getByRole("link", { name: "查看全部", exact: true })).toBeVisible();
+  await expect(card.getByRole("link", { name: /查看全部/ })).toBeVisible();
   await expectCompactCard(page, card);
 
   // 查看全部 → 词条枢纽页
-  await card.getByRole("link", { name: "查看全部", exact: true }).click();
+  await card.getByRole("link", { name: /查看全部/ }).click();
   await expect(page).toHaveURL(/\/term\//);
   await expect(page.getByRole("heading", { level: 1, name: "意识形态" })).toBeVisible();
 });
@@ -163,19 +166,19 @@ test("卡片视角入口直达视角页，卡内链接不递归弹卡", async ({
   await openLacan(page);
   const link = page.locator(".wiki-content").getByRole("link", { name: "意识形态", exact: true });
   const card = await hoverUntilCard(page, link);
-  const entry = card.locator("a").filter({ hasNotText: "查看全部" }).first();
+  const entry = card.locator('a[href^="/perspective/"]').first();
   await expect(entry).toBeVisible();
   // 卡内入口悬停不再叠出第二张卡片
   await entry.hover();
   await page.waitForTimeout(1_200);
-  await expect(page.getByRole("group", { name: "双链预览" })).toHaveCount(1);
+  await expect(page.getByRole("dialog", { name: "双链预览" })).toHaveCount(1);
   await entry.click();
   await expect(page).toHaveURL(/\/perspective\//);
 });
 
 test("移入卡片保持打开，离开链接与卡片后关闭，快速切换目标不串内容", async ({ page }) => {
   await openLacan(page);
-  const card = page.getByRole("group", { name: "双链预览" });
+  const card = page.getByRole("dialog", { name: "双链预览" });
   const first = page.locator(".wiki-content").getByRole("link", { name: "意识形态", exact: true });
   const second = page.locator(".wiki-content").getByRole("link", { name: "异化", exact: true });
 
@@ -203,7 +206,7 @@ test("键盘聚焦打开卡片：Esc 关闭并归还焦点，Tab 进入卡内入
   test.setTimeout(60_000);
   await openLacan(page);
   const link = page.locator(".wiki-content").getByRole("link", { name: "意识形态", exact: true });
-  const card = page.getByRole("group", { name: "双链预览" });
+  const card = page.getByRole("dialog", { name: "双链预览" });
 
   // 真键盘导航到链接（连续 Tab）：聚焦即开卡、聚焦状态可见
   for (let i = 0; i < 40 && !(await link.evaluate(el => document.activeElement === el)); i++) {
@@ -211,7 +214,7 @@ test("键盘聚焦打开卡片：Esc 关闭并归还焦点，Tab 进入卡内入
   }
   await expect(link).toBeFocused();
   await expect(card).toBeVisible({ timeout: 3_000 });
-  await expect(card.getByText("加载中…")).toHaveCount(0);
+  await expect(card.getByText("正在加载预览…")).toHaveCount(0);
   await expect(link).toHaveCSS("text-decoration-line", /underline/); // 聚焦可见
 
   // Tab 进入卡片入口，Esc 关闭并把焦点还给链接
@@ -227,10 +230,10 @@ test("键盘聚焦打开卡片：Esc 关闭并归还焦点，Tab 进入卡内入
   await page.keyboard.press("Shift+Tab");
   await expect(link).toBeFocused();
   await expect(card).toBeVisible({ timeout: 3_000 });
-  await expect(card.getByText("加载中…")).toHaveCount(0); // 卡内入口就位后才接管 Tab
+  await expect(card.getByText("正在加载预览…")).toHaveCount(0); // 卡内入口就位后才接管 Tab
   await page.keyboard.press("Tab");
   await expect(card.locator("a").filter({ hasNotText: "查看全部" }).first()).toBeFocused();
-  const viewAll = card.getByRole("link", { name: "查看全部", exact: true });
+  const viewAll = card.getByRole("link", { name: /查看全部/ });
   await viewAll.focus();
   await viewAll.press("Enter");
   await expect(page).toHaveURL(/\/term\//);
@@ -270,7 +273,7 @@ test("显式视角双链：展示诠释者与正文开头摘录，约 150 字截
   const normal = page.locator(".wiki-content").getByRole("link", { name: termTitle, exact: true });
   const termCard = await hoverUntilCard(page, normal);
   await expect(termCard).toContainText("词条简介。");
-  await expect(termCard.getByRole("link", { name: interpTitle, exact: true })).toHaveAttribute("href", target.href);
+  await expect(termCard.getByRole("link", { name: `${interpTitle}论${termTitle}`, exact: true })).toHaveAttribute("href", target.href);
 });
 
 test("长简介截断、空简介、空正文与零视角词条的占位提示", async ({ page, request }) => {
@@ -298,7 +301,7 @@ test("长简介截断、空简介、空正文与零视角词条的占位提示",
   });
 
   await page.goto(source.href);
-  const card = page.getByRole("group", { name: "双链预览" });
+  const card = page.getByRole("dialog", { name: "双链预览" });
 
   // 显式视角 + 空正文 → 暂无正文
   const explicit = page.locator(".wiki-content").getByRole("link", { name: "长简介", exact: true });
@@ -313,18 +316,18 @@ test("长简介截断、空简介、空正文与零视角词条的占位提示",
   await normal.hover();
   await expect(card).toBeVisible({ timeout: 3_000 });
   await expect(card).toContainText("暂无简介");
-  // 零视角：不制造视角入口，查看全部仍在
-  expect(await card.locator("a").filter({ hasNotText: "查看全部" }).count()).toBe(0);
-  await expect(card.getByRole("link", { name: "查看全部", exact: true })).toBeVisible();
+  // 零视角：不制造视角入口，词条标题仍可导航
+  await expect(card.locator('a[href^="/perspective/"]')).toHaveCount(0);
+  await expect(card.getByRole("link", { name: `空简介词条 ${suffix}`, exact: true })).toHaveAttribute("href", /\/term\//);
 
   // 长简介词条的普通卡片：约 150 字服务端截断；3 个视角入口截断到 2 + 查看全部
   await page.mouse.move(20, 60);
   const longLink = page.locator(".wiki-content").getByRole("link", { name: `长简介词条 ${suffix}` }).first();
   await longLink.hover();
   await expect(card).toBeVisible({ timeout: 3_000 });
-  const summaryText = await card.locator("p").nth(1).textContent();
+  const summaryText = await card.locator("p").first().textContent();
   expect(summaryText!.length).toBeLessThanOrEqual(152);
-  expect(await card.locator("a").filter({ hasNotText: "查看全部" }).count()).toBe(2);
+  await expect(card.locator('a[href^="/perspective/"]')).toHaveCount(2);
   await expectCompactCard(page, card);
 });
 
@@ -334,30 +337,30 @@ test("红链与暂不可用目标不弹卡片", async ({ page }) => {
   await expect(red).toBeVisible();
   await red.hover();
   await page.waitForTimeout(1_200);
-  await expect(page.getByRole("group", { name: "双链预览" })).toHaveCount(0);
+  await expect(page.getByRole("dialog", { name: "双链预览" })).toHaveCount(0);
 });
 
 test("预览加载中直接点击仍立即导航；加载失败提示且不阻断点击；触屏一次点击直接跳转", async ({ page, browser }) => {
   test.setTimeout(90_000);
   await openLacan(page);
   const link = page.locator(".wiki-content").getByRole("link", { name: "意识形态", exact: true });
-  const card = page.getByRole("group", { name: "双链预览" });
+  const card = page.getByRole("dialog", { name: "双链预览" });
 
   // 预览响应被拖慢：悬停出加载态后点击，不等预览
-  await page.route("**/api/pages/*/preview", async route => {
+  await page.route("**/api/wiki-preview?*", async route => {
     await new Promise(resolve => setTimeout(resolve, 4_000));
     try { await route.continue(); } catch { /* 页面已随导航销毁 */ }
   });
   await link.hover();
   await expect(card).toBeVisible({ timeout: 3_000 });
-  await expect(card).toContainText("加载中…");
+  await expect(card).toContainText("正在加载预览…");
   await link.click();
   await expect(page).toHaveURL(/\/term\//);
   await page.unrouteAll({ behavior: "ignoreErrors" });
   await page.goto((await lacanPerspective()).href);
 
   // 加载失败：卡片提示，原始链接照常可点
-  await page.route("**/api/pages/*/preview", route => route.abort());
+  await page.route("**/api/wiki-preview?*", route => route.abort());
   await link.hover();
   await expect(card).toBeVisible({ timeout: 3_000 });
   await expect(card).toContainText("预览暂不可用");
@@ -390,7 +393,7 @@ test("预览打开前后复制内容一致（Chromium 剪贴板权限）", async
     const copiedBefore = await page.evaluate(() => navigator.clipboard.readText());
     const link = page.locator(".wiki-content").getByRole("link", { name: "意识形态", exact: true });
     await link.hover();
-    const card = page.getByRole("group", { name: "双链预览" });
+    const card = page.getByRole("dialog", { name: "双链预览" });
     await expect(card).toBeVisible({ timeout: 3_000 });
     await page.mouse.move(20, 60); // 移开指针收起卡片，回到划线流程
     await expect(card).toBeHidden({ timeout: 2_000 });
@@ -478,7 +481,7 @@ test("隐藏目标不弹卡片，公开预览接口不泄露内容", async ({ re
     const gray = reader.locator(".wiki-content .wiki-link--unavailable").first();
     await gray.hover();
     await reader.waitForTimeout(1_200);
-    await expect(reader.getByRole("group", { name: "双链预览" })).toHaveCount(0);
+    await expect(reader.getByRole("dialog", { name: "双链预览" })).toHaveCount(0);
     const hiddenPerspective = await reader.request.get(`/api/pages/${target.pageId}/preview`);
     expect(hiddenPerspective.status()).toBe(404);
     expect(await hiddenPerspective.text()).not.toContain("隐藏前的正文内容");

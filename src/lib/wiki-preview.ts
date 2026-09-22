@@ -35,6 +35,7 @@ export async function getWikiPreview(pageId: number): Promise<WikiPreview | null
         perspectives: perspectives.slice(0, 2).map((perspective) => ({
           title: perspective.title,
           href: pagePath("perspective", perspective.slug, perspective.pageId),
+          interpreterName: perspective.interpreterName,
         })),
         perspectiveCount: perspectives.length,
       };
