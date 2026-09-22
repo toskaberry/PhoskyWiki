@@ -53,13 +53,13 @@ export function HomeCollage() {
           <ul className="mt-3 space-y-3 border-t border-border pt-3">
             {portraits.map(portrait => (
               <li key={portrait.file}>
-                <a href={portrait.source} className="underline">{portrait.name}肖像来源</a> · {portrait.credit}{" "}
-                <a href={portrait.license} className="underline">{portrait.rights}</a>。{portrait.crop}
+                <a href={portrait.source} className="inline-block py-1 -my-1 underline">{portrait.name}肖像来源</a> · {portrait.credit}{" "}
+                <a href={portrait.license} className="inline-block py-1 -my-1 underline">{portrait.rights}</a>。{portrait.crop}
               </li>
             ))}
             <li>
-              <a href="https://commons.wikimedia.org/wiki/File:Kapital_titel_bd1.png" className="underline">《资本论》扉页来源</a> · Karl Marx，1867；此图源自 Dietz Verlag Berlin 1973 年版所收扉页。{" "}
-              <a href="https://creativecommons.org/publicdomain/mark/1.0/" className="underline">公有领域（PD-old）</a>。等比缩放、倾斜，部分被肖像遮盖，未改写文字。
+              <a href="https://commons.wikimedia.org/wiki/File:Kapital_titel_bd1.png" className="inline-block py-1 -my-1 underline">《资本论》扉页来源</a> · Karl Marx，1867；此图源自 Dietz Verlag Berlin 1973 年版所收扉页。{" "}
+              <a href="https://creativecommons.org/publicdomain/mark/1.0/" className="inline-block py-1 -my-1 underline">公有领域（PD-old）</a>。等比缩放、倾斜，部分被肖像遮盖，未改写文字。
             </li>
           </ul>
           <p className="mt-3">肖像与文献为固定视觉素材，页面裁切随屏幕调整，不代表推荐顺序。原文件保持不变，图像按显示尺寸优化。</p>
