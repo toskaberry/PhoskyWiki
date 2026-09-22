@@ -1,0 +1,24 @@
+.hero { display: grid; gap: 28px; padding-block: 28px; border-bottom: 1px solid var(--border); }
+.title { font-size: clamp(40px, 11.7vw, 56px); line-height: 1.15; font-weight: 800; letter-spacing: -0.055em; margin-block: 18px 16px; }
+.title span { display: block; }
+.entrances { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 24px; border-top: 1px solid var(--border); }
+.entrances a { min-width: 0; padding: 14px 8px 0; color: var(--foreground); }
+.entrances a:first-child { padding-left: 0; }
+.entrances a + a { border-left: 1px solid var(--border); }
+.entrances strong { display: block; margin-top: 7px; font-size: 14px; font-weight: 600; }
+.entrances small { display: block; min-height: 2.8em; line-height: 1.4; font-size: 10px; color: var(--muted-foreground); }
+.sectionHeading { display: flex; align-items: center; gap: 16px; }
+.sectionNumber { display: flex; flex: 0 0 56px; height: 64px; align-items: center; justify-content: center; overflow: hidden; background: var(--accent); color: var(--primary); font-family: var(--font-code); font-size: 52px; letter-spacing: -0.12em; padding-right: 6px; clip-path: polygon(0 0, 100% 0, 100% 80%, 78% 100%, 0 100%); }
+.concept { position: relative; isolation: isolate; border-top: 1px solid var(--foreground); background: var(--card); padding: 22px; }
+.concept::after { content: ""; position: absolute; z-index: -1; top: 0; right: 0; width: 36px; height: 36px; background: linear-gradient(45deg, var(--muted) 50%, var(--background) 50%); }
+@media (min-width: 640px) {
+  .hero { padding-block: 40px; }
+  .title { font-size: 72px; }
+  .entrances strong { font-size: 18px; }
+  .entrances small { min-height: 0; font-size: 12px; }
+  .entrances a { padding: 18px 16px 0; }
+}
+@media (min-width: 1280px) {
+  .hero { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: 40px; }
+  .title { font-size: clamp(88px, 7.2vw, 104px); }
+}

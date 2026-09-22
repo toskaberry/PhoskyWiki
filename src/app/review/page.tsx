@@ -11,7 +11,7 @@ import { WikiContent } from "@/components/wiki-content";
 import { getEditorCatalog, type EditorCatalog } from "@/lib/editor-catalog";
 import { getWikiLinkTargets } from "@/lib/content";
 import { pageIdFromKey } from "@/lib/slug";
-import { renderMarkdown, wikiLinkResolver, type WikiLinkTarget } from "@/lib/markdown";
+import { renderMarkdown, previewWikiLinkResolver } from "@/lib/markdown";
 import { ReviewActions } from "@/components/review-actions";
 import type { QueueItem } from "@/lib/review";
 import type { SubmissionKind } from "@/db/schema";
@@ -29,14 +29,9 @@ const kindLabels: Record<SubmissionKind, string> = {
 };
 
 async function QueueEntry({ item, catalog }: { item: QueueItem; catalog: EditorCatalog }) {
-  const targets = new Map<string, WikiLinkTarget>(catalog.targets.map(({ key, href }) => [key, { href, exists: true }]));
   const sourceId = item.targetHref ? pageIdFromKey(item.targetHref.split("/").pop() ?? "") : null;
-  if (sourceId !== null) {
-    for (const [key, target] of await getWikiLinkTargets(sourceId)) {
-      if (target.exists || target.unavailable) targets.set(key, target);
-    }
-  }
-  const previewHtml = renderMarkdown(item.content, wikiLinkResolver(targets));
+  const resolvedTargets = sourceId !== null ? await getWikiLinkTargets(sourceId) : undefined;
+  const previewHtml = renderMarkdown(item.content, previewWikiLinkResolver(catalog.targets, resolvedTargets));
   const target =
     item.kind === "edit"
       ? item.targetTitle

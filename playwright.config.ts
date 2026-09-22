@@ -16,6 +16,7 @@ if (process.env.TEST_APP_IMAGE) process.env.PW_CONTAINER_NAME ??= `phosky-e2e-${
 
 export default defineConfig({
   testDir: "./tests/e2e",
+  globalSetup: './tests/e2e-setup.ts',
   globalTeardown: './tests/e2e-container-teardown.ts',
   timeout: 30_000,
   fullyParallel: true,

@@ -5,6 +5,10 @@ import { createPortal } from "react-dom";
 import { pageIdFromKey } from "@/lib/slug";
 import type { WikiPreview } from "@/lib/wiki-preview-types";
 
+// Compact spacing fits a title in 40px, or a title and one detail row in 64px.
+const MIN_CARD_HEIGHT = 40;
+const MIN_DETAIL_HEIGHT = 64;
+
 type PreviewState = {
   left: number;
   top: number;
@@ -75,6 +79,10 @@ export function WikiPreviewContent({ html }: { html: string }) {
         return;
       }
       const position = locate(anchor);
+      if (position.maxHeight < MIN_CARD_HEIGHT) {
+        close();
+        return;
+      }
       setPreview(current => current ? { ...current, ...position } : null);
     };
     const activate = (link: HTMLAnchorElement, delay: number) => {
@@ -87,6 +95,10 @@ export function WikiPreviewContent({ html }: { html: string }) {
         const pageId = pageIdFromKey(new URL(link.href).pathname.split("/").pop() ?? "");
         if (pageId === null) return;
         const position = locate(link);
+        if (position.maxHeight < MIN_CARD_HEIGHT) {
+          close();
+          return;
+        }
         visible = true;
         link.setAttribute("aria-controls", id);
         link.setAttribute("aria-expanded", "true");
@@ -182,18 +194,19 @@ export function WikiPreviewContent({ html }: { html: string }) {
   }, [html, id]);
 
   return <>
-    <div ref={rootRef} className="wiki-content prose prose-zinc dark:prose-invert max-w-none"
+    <div ref={rootRef} className="wiki-content prose max-w-none"
       dangerouslySetInnerHTML={{ __html: html }} />
     {preview && createPortal(
       <div ref={cardRef} id={id} role="dialog" aria-label="双链预览"
-        className="wiki-preview" style={{ left: preview.left, top: preview.top, maxHeight: preview.maxHeight, transform: preview.above ? "translateY(-100%)" : undefined }}>
+        className="wiki-preview" data-compact={preview.maxHeight < 120 || undefined}
+        style={{ left: preview.left, top: preview.top, maxHeight: preview.maxHeight, transform: preview.above ? "translateY(-100%)" : undefined }}>
         {typeof preview.content === "string" ? (
           <p role="status">{preview.content === "loading" ? "正在加载预览…" : "预览暂不可用"}</p>
         ) : <>
           <a className="wiki-preview-title" href={preview.content.href}>{preview.content.title}</a>
-          {preview.content.type === "perspective" && <p className="wiki-preview-interpreter">诠释者：{preview.content.interpreterName}</p>}
+          {preview.content.type === "perspective" && preview.maxHeight >= MIN_DETAIL_HEIGHT && <p className="wiki-preview-interpreter">诠释者：{preview.content.interpreterName}</p>}
           {preview.maxHeight >= 120 && <p className="wiki-preview-excerpt">{preview.content.excerpt || (preview.content.type === "term" ? "暂无简介" : "暂无正文")}</p>}
-          {preview.content.type === "term" && preview.content.perspectiveCount > 0 && (
+          {preview.content.type === "term" && preview.content.perspectiveCount > 0 && preview.maxHeight >= MIN_DETAIL_HEIGHT && (
             <nav aria-label="视角入口" className="wiki-preview-perspectives">
               {(preview.maxHeight >= 180 ? preview.content.perspectives : []).map(perspective => <a key={perspective.href} href={perspective.href}>{perspective.title}</a>)}
               <a href={preview.content.href}>查看全部（{preview.content.perspectiveCount}）</a>

@@ -124,6 +124,31 @@ test("蓝色正文链接保留强调，小浮卡显示词条简介与两个视�
   await expect(page).toHaveURL(new RegExp(`${sample.term.pageId}$`));
 });
 
+test("低矮窗口中的预览入口完整可见且可点击 @cross-browser", async ({ page, sample }) => {
+  await page.setViewportSize({ width: 900, height: 200 });
+  await page.goto(sample.source.href);
+  const link = bodyLink(page);
+  await page.keyboard.press("Tab");
+  await link.focus();
+  await link.evaluate(element => element.scrollIntoView({ block: "center" }));
+  await expect(card(page)).toContainText("查看全部");
+  await compactCard(page);
+  const all = card(page).getByRole("link", { name: /查看全部/ });
+  await expect(all).toBeInViewport({ ratio: 1 });
+  await all.click();
+  await expect(page).toHaveURL(new RegExp(`${sample.term.pageId}$`));
+  await page.setViewportSize({ width: 900, height: 160 });
+  await page.goto(sample.source.href);
+  await page.keyboard.press("Tab");
+  await bodyLink(page).focus();
+  await bodyLink(page).evaluate(element => element.scrollIntoView({ block: "center" }));
+  await expect(card(page)).toContainText(sample.title);
+  await compactCard(page);
+  for (const entry of await card(page).getByRole("link").all()) {
+    await expect(entry).toBeInViewport({ ratio: 1 });
+  }
+});
+
 test("键盘访问具名视角与浮卡链接，离开关闭，空简介保持可读", async ({ page, sample }) => {
   await page.goto(sample.source.href);
   await bodyLink(page, "具名视角").focus();

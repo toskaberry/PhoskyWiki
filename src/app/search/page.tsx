@@ -1,8 +1,10 @@
 // 全站搜索页（T10/ADR-0002）：服务端直查 SearchIndex 端口，
-// 按类型分面过滤（词条/诠释者/视角 + 讨论预留维度，讨论区落地前恒为空）。
+// 按类型分面过滤词条、诠释者、视角与页面评论。
 // 请求期执行（q 每次不同），结果高亮片段已按 highlightHtml 转义。
 
 import Link from "next/link";
+import { PageContainer } from "@/components/page-container";
+import { DiscoveryHeader, DiscoveryEmpty, DiscoveryRow } from "@/components/discovery";
 
 import { SearchBox } from "@/components/search-box";
 import { searchPublicPages } from "@/lib/search/public-search";
@@ -28,19 +30,32 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
   const result = parsed.q ? await runSearch(parsed) : null;
 
   return (
-    <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-10">
-      <h1 className="text-2xl font-bold tracking-tight">全站搜索</h1>
-      <p className="mt-1 text-sm text-muted-foreground">
-        覆盖词条名、诠释者名、视角正文与讨论帖；支持即打即搜联想。
-      </p>
+    <PageContainer>
+      <DiscoveryHeader label="检索 / 全站内容" title="全站搜索">
+        <p>查找词条、诠释者、视角正文与页面评论；输入时可选择联想结果。</p>
+      </DiscoveryHeader>
       <div className="mt-6">
-        <SearchBox initialQuery={parsed.q} autoFocus size="lg" />
+        <SearchBox key={parsed.q} initialQuery={parsed.q} size="lg" />
       </div>
 
+      {!parsed.q && (
+        <div className="mt-8">
+          <DiscoveryEmpty href="/terms" label="浏览词条索引">输入关键词开始搜索，也可以从词条索引出发。</DiscoveryEmpty>
+        </div>
+      )}
+      {parsed.q && (
+        <div className="mt-4 flex flex-wrap items-baseline gap-x-6 gap-y-2 text-sm">
+          <p className="min-w-0 break-words text-muted-foreground">当前查询：{parsed.q} · {parsed.type ? SEARCH_TYPE_LABELS[parsed.type] : "全部类型"}</p>
+          <Link href="/search" className="py-2 text-primary underline-offset-4 hover:underline">清除搜索</Link>
+        </div>
+      )}
+
       {result?.error && (
-        <p role="alert" className="mt-8 rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-          搜索服务暂时不可用，请稍后重试。
-        </p>
+        <div role="alert" className="mt-8 border-y border-destructive/40 py-6 text-sm">
+          <p className="text-destructive">搜索服务暂时不可用，请稍后重试。</p>
+          <a href={facetHref(parsed.q, parsed.type, parsed.offset)} className="mt-3 inline-block py-2 text-primary underline-offset-4 hover:underline">重新搜索</a>
+          <Link href="/terms" className="ml-6 inline-block py-2 text-primary underline-offset-4 hover:underline">浏览词条索引</Link>
+        </div>
       )}
 
       {result && !result.error && (
@@ -65,29 +80,23 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
           </nav>
 
           {result.hits.length === 0 ? (
-            <p className="mt-8 text-sm text-muted-foreground">
-              没有与「{parsed.q}」匹配的内容。
-            </p>
+            <div className="mt-8">
+              <DiscoveryEmpty href={parsed.type ? facetHref(parsed.q, null) : "/terms"} label={parsed.type ? "查看全部类型" : "浏览词条索引"}>
+                没有与「{parsed.q}」匹配的内容。
+              </DiscoveryEmpty>
+              {parsed.offset > 0 && <Link href={facetHref(parsed.q, parsed.type)} className="mt-4 inline-block py-2 text-sm text-primary hover:underline">返回第一页</Link>}
+            </div>
           ) : (
             <>
-              <ul className="mt-6 flex flex-col gap-5" data-testid="search-results">
+              <ul className="mt-6 divide-y divide-border border-y border-border" data-testid="search-results">
                 {result.hits.map((hit) => (
-                  <li key={`${hit.type}-${hit.pageId}`}>
-                    <Link
-                      href={searchHitHref(hit)}
-                      className="text-lg font-medium underline-offset-4 hover:underline"
-                      dangerouslySetInnerHTML={{ __html: highlightHtml(hit.title) }}
-                    />
-                    <span className="ml-2 align-middle rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
-                      {SEARCH_TYPE_LABELS[hit.type]}
-                    </span>
-                    {hit.snippet && (
-                      <p
-                        className="mt-1 line-clamp-3 text-sm text-muted-foreground [&_mark]:bg-primary/15 [&_mark]:text-foreground"
-                        dangerouslySetInnerHTML={{ __html: hit.snippet }}
-                      />
-                    )}
-                  </li>
+                  <DiscoveryRow
+                    key={`${hit.type}-${hit.pageId}`}
+                    href={searchHitHref(hit)}
+                    title={<span className="[&_mark]:bg-primary/15 [&_mark]:text-foreground" dangerouslySetInnerHTML={{ __html: highlightHtml(hit.title) }} />}
+                    meta={SEARCH_TYPE_LABELS[hit.type]}
+                    description={hit.snippet ? <span className="[&_mark]:bg-primary/15 [&_mark]:text-foreground" dangerouslySetInnerHTML={{ __html: hit.snippet }} /> : undefined}
+                  />
                 ))}
               </ul>
               <Pagination parsed={parsed} total={result.total} />
@@ -95,7 +104,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
           )}
         </>
       )}
-    </main>
+    </PageContainer>
   );
 }
 
@@ -138,8 +147,8 @@ function FacetTab({
     <Link
       href={href}
       aria-current={active ? "page" : undefined}
-      className={`rounded-full px-3 py-1 text-sm transition-colors ${
-        active ? "bg-foreground text-background" : "text-muted-foreground hover:bg-muted hover:text-foreground"
+      className={`border-b-2 px-3 py-2 text-sm transition-colors ${
+        active ? "border-primary font-semibold text-primary" : "border-transparent text-muted-foreground hover:border-border hover:text-foreground"
       }`}
     >
       {label}

@@ -1,3 +1,4 @@
+import { openAccountMenu } from "./navigation-fixture";
 import { invitationFixture } from "../auth-fixture";
 // 审核流全流程（T06 验收）：编者提交 → 管理员在队列看 diff 后受理 → 游客可见新内容。
 // 走种子数据（主体性 词条的福柯视角）；种子管理员登录受理。
@@ -38,7 +39,7 @@ async function login(page: Page, email: string, password: string): Promise<void>
   await page.getByLabel("邮箱").fill(email);
   await page.getByLabel("密码").fill(password);
   await page.getByRole("button", { name: "登录" }).click();
-  await expect(page.getByRole("heading", { level: 1, name: "PhoskyWiki" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: /思想，\s*在分歧中展开。/ })).toBeVisible();
 }
 
 test("编者提交 → 管理员受理 → 游客可见新内容", async ({ page }) => {
@@ -72,7 +73,7 @@ test("编者提交 → 管理员受理 → 游客可见新内容", async ({ page
   await expect(page.getByTestId("submit-success")).toContainText("等待审核");
 
   // 登出后以游客身份确认新内容尚未生效
-  await page.getByRole("button", { name: "登出" }).click();
+  await (await openAccountMenu(page)).getByRole("button", { name: "登出" }).click();
   await expect(page.getByRole("banner")).toContainText("登录");
   await page.goto("/");
   await page.getByRole("link", { name: "主体性", exact: true }).click();
@@ -81,7 +82,7 @@ test("编者提交 → 管理员受理 → 游客可见新内容", async ({ page
 
   // 种子管理员在审核队列看「当前版 vs 提案」diff 后受理
   await login(page, ADMIN_EMAIL, ADMIN_PASSWORD!);
-  await page.getByRole("link", { name: "审核队列" }).click();
+  await (await openAccountMenu(page)).getByRole("link", { name: "审核队列", exact: true }).click();
   await expect(page.getByRole("heading", { level: 1, name: /审核队列/ })).toBeVisible();
 
   const item = page.locator("[data-submission-id]").filter({ hasText: "福柯论主体性" });
@@ -94,7 +95,7 @@ test("编者提交 → 管理员受理 → 游客可见新内容", async ({ page
   await expect(item).toHaveCount(0);
 
   // 登出后游客读路径立即可见新内容（具名视角页）
-  await page.getByRole("button", { name: "登出" }).click();
+  await (await openAccountMenu(page)).getByRole("button", { name: "登出" }).click();
   await expect(page.getByRole("banner")).toContainText("登录");
   await page.goto("/");
   await page.getByRole("link", { name: "主体性", exact: true }).click();
@@ -124,7 +125,7 @@ test("驳回必填理由：不填无法提交驳回", async ({ page }) => {
   await expect(page.getByTestId("submit-success")).toContainText("等待审核");
 
   await login(page, ADMIN_EMAIL, ADMIN_PASSWORD!);
-  await page.getByRole("link", { name: "审核队列" }).click();
+  await (await openAccountMenu(page)).getByRole("link", { name: "审核队列", exact: true }).click();
   const item = page.locator("[data-submission-id]").filter({ hasText: "拉康论主体性" });
   await item.getByRole("button", { name: "驳回…" }).click();
   // 理由为空时确认驳回不可点
@@ -135,7 +136,7 @@ test("驳回必填理由：不填无法提交驳回", async ({ page }) => {
   await item.getByRole("button", { name: "确认驳回" }).click();
   await expect(item).toHaveCount(0);
 
-  await page.getByRole("button", { name: "登出" }).click();
+  await (await openAccountMenu(page)).getByRole("button", { name: "登出" }).click();
   await openLacanPerspective(page);
   await expect(page.getByText(marker)).toHaveCount(0);
 });

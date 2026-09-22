@@ -1,5 +1,9 @@
 import Link from "next/link";
 
+import { HomeCollage } from "@/components/home-collage";
+import { PageContainer } from "@/components/page-container";
+import styles from "./home.module.css";
+
 import { SearchBox } from "@/components/search-box";
 import { listRecentPerspectives, listSchools, listTerms } from "@/lib/content";
 import { getSessionUser } from "@/lib/session";
@@ -24,24 +28,43 @@ export default async function Home() {
   const recommendations = interests ? await listHomeRecommendations(interests) : [];
 
   return (
-    <main className="mx-auto w-full max-w-5xl flex-1 px-4 pb-16">
-      <section className="border-b border-border py-14 sm:py-20" aria-label="探索知识">
-        <p className="text-xs font-medium tracking-[0.22em] text-muted-foreground">哲学 / 政治经济学 / 历史</p>
-        <h1 className="mt-6 text-4xl font-bold tracking-tight sm:text-6xl">PhoskyWiki</h1>
-        <p className="mt-5 max-w-2xl font-serif text-2xl leading-relaxed sm:text-3xl">一个概念，多种思想的交汇。</p>
-        <p className="mt-4 max-w-xl text-sm leading-7 text-muted-foreground">从问题开始，在不同诠释者的视角之间阅读、比较与追问。</p>
-        <div className="mt-8 max-w-3xl">
-          <SearchBox size="lg" />
-          <p className="mt-3 text-xs text-muted-foreground">试着搜索「主体性」「剩余价值」，或一位思想家的名字。</p>
+    <PageContainer className="max-w-[1408px] py-0 pb-16">
+      <section className={styles.hero} aria-label="探索知识">
+        <div className="min-w-0">
+          <p className="text-xs font-medium tracking-[0.16em] text-muted-foreground">哲学 / 政治经济学 / 历史</p>
+          <h1 className={styles.title}><span>思想，</span><span>在分歧中展开。</span></h1>
+          <p className="font-serif text-xl leading-relaxed sm:text-2xl">一个概念，多种视角。</p>
+          <div className="relative z-10 mt-5 sm:mt-7">
+            <SearchBox size="lg" />
+            <p className="mt-2 text-xs leading-5 text-muted-foreground">从一个概念或一位思想家的名字开始。</p>
+          </div>
+          <nav aria-label="三轴入口" className={styles.entrances}>
+            {entrances.map((entrance, index) => (
+              <Link key={entrance.href} href={entrance.href}>
+                <small>0{index + 1} / {entrance.description}</small>
+                <strong>{entrance.title} <span aria-hidden="true">↗</span></strong>
+              </Link>
+            ))}
+          </nav>
         </div>
-        <nav aria-label="三轴入口" className="mt-10 grid gap-3 sm:grid-cols-3">
-          {entrances.map((entrance, index) => (
-            <Link key={entrance.href} href={entrance.href} className="rounded-lg border border-border p-4 transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-4">
-              <span className="text-xs text-muted-foreground">0{index + 1} / {entrance.description}</span>
-              <span className="mt-3 flex items-center justify-between font-semibold">{entrance.title}<span aria-hidden="true">↗</span></span>
-            </Link>
+        <HomeCollage />
+      </section>
+
+      <section id="terms" aria-labelledby="terms-heading" className="scroll-mt-32 py-12">
+        <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+          <HomeSectionHeading number="01" label="THE CONCEPTS" title="探索概念" id="terms-heading" />
+          <Link href="/terms" className="text-sm underline underline-offset-4">浏览全部 {terms.length} 个词条</Link>
+        </div>
+        <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {terms.slice(0, 6).map((term, index) => (
+            <li key={term.id} className={`min-w-0 ${styles.concept}`}>
+              <p className="mb-6 text-xs text-muted-foreground">0{index + 1} / {term.perspectiveCount} 个视角</p>
+              <Link href={pagePath("term", term.slug, term.id)} className="break-words font-serif text-2xl font-semibold underline-offset-4 hover:underline">{term.title}</Link>
+              <p className="mt-4 break-words text-sm leading-7 text-muted-foreground">{term.summary}</p>
+            </li>
           ))}
-        </nav>
+        </ul>
+        {terms.length === 0 && <p className="text-muted-foreground">还没有词条，欢迎参与共建。</p>}
       </section>
 
       {user && <section className="mt-10 rounded-lg border border-border bg-muted/40 p-6" aria-labelledby="for-you-heading">
@@ -49,7 +72,7 @@ export default async function Home() {
         <p className="mt-3 text-sm text-muted-foreground">{recommendations.length > 0
           ? "根据你关注的诠释者、学派与主题，继续探索这些词条。"
           : interests && hasAnyInterest(interests)
-            ? "暂时没有匹配你兴趣的词条，可以调整兴趣或浏览本周概念。"
+            ? "暂时没有匹配你兴趣的词条，可以调整兴趣或浏览“探索概念”栏目。"
             : "选择感兴趣的诠释者、学派与主题，找到下一步的阅读方向。"}</p>
         {recommendations.length > 0 && <ul className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {recommendations.map((term) => <li key={term.id} className="min-w-0">
@@ -62,26 +85,8 @@ export default async function Home() {
         <Link href="/interests" className="mt-4 inline-block text-sm underline underline-offset-4">{interests && hasAnyInterest(interests) ? "调整兴趣标签" : "设置兴趣标签"}</Link>
       </section>}
 
-      <section id="terms" aria-labelledby="terms-heading" className="scroll-mt-32 py-12">
-        <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
-          <div><p className="mb-2 text-xs tracking-widest text-muted-foreground">THE CONCEPTS</p><h2 id="terms-heading" className="text-2xl font-semibold">本周概念</h2></div>
-          <Link href="/terms" className="text-sm underline underline-offset-4">浏览全部 {terms.length} 个词条</Link>
-        </div>
-        <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {terms.slice(0, 6).map((term, index) => (
-            <li key={term.id} className={`min-w-0 rounded-lg border p-6 ${index === 0 ? "border-stone-800 bg-stone-900 text-stone-50" : "border-border bg-card"}`}>
-              <p className={`mb-6 text-xs ${index === 0 ? "text-stone-300" : "text-muted-foreground"}`}>0{index + 1} / {term.perspectiveCount} 个视角</p>
-              <Link href={pagePath("term", term.slug, term.id)} className="break-words font-serif text-2xl font-semibold underline-offset-4 hover:underline">{term.title}</Link>
-              <p className={`mt-4 break-words text-sm leading-7 ${index === 0 ? "text-stone-300" : "text-muted-foreground"}`}>{term.summary}</p>
-            </li>
-          ))}
-        </ul>
-        {terms.length === 0 && <p className="text-muted-foreground">本周概念正在准备中。欢迎参与共建。</p>}
-      </section>
-
       <section aria-labelledby="recent-heading" className="border-t border-border py-12">
-        <p className="mb-2 text-xs tracking-widest text-muted-foreground">NEW PERSPECTIVES</p>
-        <h2 id="recent-heading" className="text-2xl font-semibold">新视角</h2>
+        <HomeSectionHeading number="02" label="NEW PERSPECTIVES" title="新视角" id="recent-heading" />
         <p className="mt-3 text-sm text-muted-foreground">最近发布的诠释，为熟悉的问题打开另一扇窗。</p>
         <ul className="mt-6 grid gap-x-8 sm:grid-cols-2">
           {recent.map((perspective) => (
@@ -96,7 +101,7 @@ export default async function Home() {
 
       <section aria-labelledby="schools-heading" className="border-t border-border pt-12">
         <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
-          <div><p className="mb-2 text-xs tracking-widest text-muted-foreground">SCHOOLS OF THOUGHT</p><h2 id="schools-heading" className="text-2xl font-semibold">学派巡礼</h2></div>
+          <HomeSectionHeading number="03" label="SCHOOLS OF THOUGHT" title="学派巡礼" id="schools-heading" />
           <Link href="/schools" className="text-sm underline underline-offset-4">探索全部学派</Link>
         </div>
         <ul className="grid gap-4 sm:grid-cols-3">
@@ -108,8 +113,25 @@ export default async function Home() {
             </li>
           ))}
         </ul>
-        {schools.length === 0 && <p className="text-muted-foreground">学派巡礼正在准备中。</p>}
+        {schools.length === 0 && <p className="text-muted-foreground">还没有学派，欢迎参与共建。</p>}
       </section>
-    </main>
+    </PageContainer>
+  );
+}
+
+function HomeSectionHeading({ number, label, title, id }: {
+  number: string;
+  label: string;
+  title: string;
+  id: string;
+}) {
+  return (
+    <div className={styles.sectionHeading}>
+      <span className={styles.sectionNumber} aria-hidden="true">{number}</span>
+      <div>
+        <p className="mb-2 text-xs tracking-widest text-muted-foreground">{label}</p>
+        <h2 id={id} className="text-2xl font-semibold">{title}</h2>
+      </div>
+    </div>
   );
 }

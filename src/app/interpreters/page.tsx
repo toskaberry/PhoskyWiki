@@ -1,26 +1,29 @@
-import Link from "next/link";
-
+import { PageContainer } from "@/components/page-container";
+import { DiscoveryHeader, DiscoveryList, DiscoveryRow, DiscoveryEmpty } from "@/components/discovery";
 import { listInterpreters } from "@/lib/content";
 import { pagePath } from "@/lib/slug";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "诠释者索引" };
 
-export default async function InterpretersPage() {
+export default async function Page() {
   const interpreters = await listInterpreters();
   return (
-    <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-10">
-      <h1 className="text-3xl font-bold tracking-tight">诠释者索引</h1>
-      <p className="mt-3 text-muted-foreground">沿着一位思想家的问题意识，阅读彼此关联的概念。</p>
-      <ul className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {interpreters.map((interpreter) => (
-          <li key={interpreter.pageId} className="min-w-0 rounded-lg border p-5">
-            <Link href={pagePath("interpreter", interpreter.slug, interpreter.pageId)} className="break-words text-lg font-semibold underline-offset-4 hover:underline">{interpreter.name}</Link>
-            <p className="mt-3 break-words text-sm leading-relaxed text-muted-foreground">{interpreter.summary}</p>
-          </li>
-        ))}
-      </ul>
-      {interpreters.length === 0 && <p className="mt-8 text-muted-foreground">还没有诠释者，欢迎参与共建。</p>}
-    </main>
+    <PageContainer>
+      <DiscoveryHeader label="思想家 / 诠释者" title="诠释者索引">
+        <p>沿着一位思想家的问题意识，阅读彼此关联的概念。诠释者是提供思想视角的人物，编者是整理和提交页面的人。</p>
+      </DiscoveryHeader>
+      <section aria-label="全部诠释者" className="mt-8">
+        {interpreters.length > 0 ? (
+          <DiscoveryList>
+            {interpreters.map((interpreter) => (
+              <DiscoveryRow key={interpreter.pageId} href={pagePath("interpreter", interpreter.slug, interpreter.pageId)} title={interpreter.name} description={interpreter.summary} meta={"诠释者"} />
+            ))}
+          </DiscoveryList>
+        ) : (
+          <DiscoveryEmpty href="/" label="返回首页">还没有诠释者，欢迎参与共建。</DiscoveryEmpty>
+        )}
+      </section>
+    </PageContainer>
   );
 }

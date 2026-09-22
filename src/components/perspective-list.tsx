@@ -48,14 +48,15 @@ export function PerspectiveList({ items, interestInterpreterIds = null }: Perspe
           已按你的兴趣把相关诠释者的视角排前。
         </p>
       )}
-      <ul className="divide-y divide-border rounded-lg border border-border">
+      <ul aria-label="视角目录" className="divide-y divide-border border-y border-border">
         {visible.map((item) => (
-          <li key={item.pageId} className="flex items-baseline justify-between gap-3 px-4 py-3">
+          <li key={item.pageId} className="grid min-w-0 gap-2 py-5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:gap-6">
             <div className="min-w-0">
-              <Link href={item.href} className="font-medium hover:underline">
+              <Link href={item.href} className="break-words text-lg font-medium leading-relaxed hover:underline">
                 {item.title}
               </Link>
-              <span className="ml-2 text-sm text-muted-foreground">
+              <span className="mt-1 block text-sm text-muted-foreground">
+                诠释者 · {" "}
                 <Link
                   href={item.interpreterHref}
                   className="hover:text-foreground hover:underline"
@@ -80,7 +81,7 @@ export function PerspectiveList({ items, interestInterpreterIds = null }: Perspe
           type="button"
           aria-expanded={expanded}
           onClick={() => setExpanded((v) => !v)}
-          className="mt-3 text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+          className="mt-4 min-h-11 border border-input px-4 py-2 text-sm hover:bg-muted"
         >
           {expanded ? "收起" : `展开全部（还有 ${hiddenCount} 条）`}
         </button>

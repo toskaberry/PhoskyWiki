@@ -10,6 +10,12 @@ test("词条页：视角列表折叠展开 + 信息框", async ({ page }) => {
   // 导航页没有默认正文；所有解释均在具名视角中。
   await expect(page.locator("#board-heading")).toHaveCount(0);
   await expect(page.locator(".wiki-content")).toHaveCount(0);
+  // 词条身份和目录在前，资料与关联探索各自可定位。
+  const headings = await page.getByRole("main").getByRole("heading", { level: 2 }).allTextContents();
+  expect(headings.findIndex(text => text.startsWith("诠释者视角"))).toBeLessThan(headings.indexOf("词条资料"));
+  expect(headings.indexOf("词条资料")).toBeLessThan(headings.indexOf("继续探索"));
+  await expect(page.getByRole("region", { name: "词条资料", exact: true })).toContainText("主体、subject");
+  await expect(page.getByRole("region", { name: "继续探索", exact: true })).toContainText("相关词条");
   // 信息框
   await expect(page.getByText("词条（聚合枢纽）")).toBeVisible();
   await expect(page.getByText("主体、subject")).toBeVisible();

@@ -1,0 +1,108 @@
+.page {
+  width: 100%;
+  max-width: 88rem;
+  margin-inline: auto;
+  padding: 2rem 1rem 4rem;
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+
+.header, .body, .tools, .comments {
+  width: 100%;
+  max-width: 700px;
+  min-width: 0;
+  margin-inline: auto;
+}
+
+.layout {
+  margin-top: 2rem;
+}
+
+.desktopContents {
+  display: none;
+}
+
+.mobileContents {
+  margin-bottom: 2rem;
+  border-block: 1px solid var(--border);
+  padding-block: 0.75rem;
+  font-family: var(--font-ui);
+}
+
+.mobileContents summary {
+  cursor: pointer;
+  padding-block: 0.25rem;
+  font-weight: 600;
+}
+
+.mobileContents nav {
+  max-height: 50vh;
+  overflow-y: auto;
+  margin-top: 1rem;
+}
+
+.body :global(.wiki-content) {
+  font-size: 18px;
+  line-height: 1.85;
+}
+
+.body :global(.wiki-content) :where(p) {
+  margin-block: 1.1em;
+}
+
+.body :global(.wiki-content) :where(h1, h2, h3, h4, h5, h6) {
+  margin-top: 2.5em;
+  margin-bottom: 1em;
+  scroll-margin-top: 6rem;
+}
+
+.body :global(.wiki-content) > :first-child {
+  margin-top: 0;
+}
+
+.tools {
+  margin-top: 3rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border);
+}
+
+@media (min-width: 1280px) {
+  .layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 700px minmax(0, 1fr);
+    gap: 2rem;
+    align-items: start;
+  }
+
+  .desktopContents {
+    display: block;
+    position: sticky;
+    top: 6rem;
+    max-height: calc(100dvh - 8rem);
+    overflow-y: auto;
+    max-width: 16rem;
+    min-width: 0;
+    justify-self: end;
+    padding-right: 1rem;
+    border-right: 1px solid var(--border);
+  }
+
+  .mobileContents {
+    display: none;
+  }
+
+  .body {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .tools {
+    grid-column: 3;
+    grid-row: 1;
+    margin-top: 0;
+    padding-top: 0;
+    border-top: 0;
+    max-width: 16rem;
+    margin-inline: 0;
+  }
+}

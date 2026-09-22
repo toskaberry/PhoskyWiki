@@ -1,3 +1,5 @@
+import { PageContainer } from "@/components/page-container";
+import { DiscoveryHeader, DiscoveryList, DiscoveryRow, DiscoveryEmpty } from "@/components/discovery";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
@@ -20,32 +22,30 @@ export default async function CategoryPage({ params }: Params) {
   if (!category) notFound();
 
   return (
-    <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-8">
-      <nav aria-label="面包屑" className="mb-4 text-sm text-muted-foreground">
-        <Link href="/" className="hover:text-foreground">
+    <PageContainer>
+      <nav aria-label="面包屑" className="mb-6 flex flex-wrap items-center gap-y-2 break-words text-sm text-muted-foreground">
+        <Link href="/" className="min-w-0 break-words hover:text-foreground">
           首页
         </Link>
         <span className="mx-1.5">/</span>
-        <Link href="/categories" className="hover:text-foreground">
+        <Link href="/categories" className="min-w-0 break-words hover:text-foreground">
           分类
         </Link>
         {category.path.map((ancestor) => (
-          <span key={ancestor.id} className="flex items-center">
+          <span key={ancestor.id} className="contents">
             <span className="mx-1.5">/</span>
-            <Link href={categoryPath(ancestor.slug)} className="hover:text-foreground">
+            <Link href={categoryPath(ancestor.slug)} className="min-w-0 break-words hover:text-foreground">
               {ancestor.name}
             </Link>
           </span>
         ))}
         <span className="mx-1.5">/</span>
-        <span aria-current="page">{category.name}</span>
+        <span aria-current="page" className="min-w-0 break-words">{category.name}</span>
       </nav>
 
-      <h1 className="text-3xl font-bold tracking-tight">{category.name}</h1>
-      <p className="mt-3 text-sm text-muted-foreground">
-        分类 · {category.terms.length} 个词条
-        {category.children.length > 0 && ` · ${category.children.length} 个子分类`}
-      </p>
+      <DiscoveryHeader label="知识主题 / 分类" title={category.name}>
+        <p>分类 · {category.terms.length} 个词条{category.children.length > 0 && ` · ${category.children.length} 个子分类`}</p>
+      </DiscoveryHeader>
 
       {category.children.length > 0 && (
         <section aria-labelledby="children-heading" className="mt-8">
@@ -54,13 +54,13 @@ export default async function CategoryPage({ params }: Params) {
           </h2>
           <ul className="flex flex-wrap gap-2">
             {category.children.map((child) => (
-              <li key={child.id}>
+              <li key={child.id} className="min-w-0 max-w-full">
                 <Link
                   href={categoryPath(child.slug)}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1 text-sm hover:border-foreground/40"
+                  className="inline-flex max-w-full items-baseline gap-2 border-b border-border py-2 text-sm text-primary hover:border-primary"
                 >
-                  {child.name}
-                  <span className="text-xs text-muted-foreground">{child.termCount}</span>
+                  <span className="min-w-0 break-words">{child.name}</span>
+                  <span className="shrink-0 text-xs text-muted-foreground">{child.termCount}</span>
                 </Link>
               </li>
             ))}
@@ -73,25 +73,15 @@ export default async function CategoryPage({ params }: Params) {
           词条（{category.terms.length}）
         </h2>
         {category.terms.length > 0 ? (
-          <ul className="divide-y divide-border rounded-lg border border-border">
+          <DiscoveryList>
             {category.terms.map((term) => (
-              <li key={term.id} className="px-4 py-3">
-                <Link
-                  href={pagePath("term", term.slug, term.id)}
-                  className="font-medium hover:underline"
-                >
-                  {term.title}
-                </Link>
-                <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-                  {term.summary}
-                </p>
-              </li>
+              <DiscoveryRow key={term.id} href={pagePath("term", term.slug, term.id)} title={term.title} description={term.summary} meta="词条" />
             ))}
-          </ul>
+          </DiscoveryList>
         ) : (
-          <p className="text-sm text-muted-foreground">该分类下暂无词条。</p>
+          <DiscoveryEmpty href="/categories" label="返回分类索引">该分类下暂无词条。</DiscoveryEmpty>
         )}
       </section>
-    </main>
+    </PageContainer>
   );
 }

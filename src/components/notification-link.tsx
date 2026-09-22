@@ -3,11 +3,12 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import { Bell } from "lucide-react";
 
 export const NOTIFICATIONS_CHANGED = "phoskywiki:notifications-changed";
 
 /** 根布局在站内导航时会被复用，未读数量需要独立刷新。 */
-export function NotificationLink({ initialCount }: { initialCount: number }) {
+export function NotificationLink({ initialCount, compact = false }: { initialCount: number; compact?: boolean }) {
   const [count, setCount] = useState(initialCount);
   const pathname = usePathname();
 
@@ -40,9 +41,15 @@ export function NotificationLink({ initialCount }: { initialCount: number }) {
     };
   }, [pathname]);
 
+  const label = count > 0 ? `通知（${count} 条未读）` : "通知";
   return (
-    <Link href="/profile#notifications" className="rounded-md px-2.5 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
-      {count > 0 ? `通知（${count} 条未读）` : "通知"}
+    <Link href="/profile#notifications" aria-label={label} className={compact
+      ? "relative inline-flex size-11 shrink-0 items-center justify-center rounded text-foreground transition-colors hover:bg-muted"
+      : "inline-flex min-h-11 items-center rounded px-2.5 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"}>
+      {compact ? <>
+        <Bell aria-hidden="true" className="size-5" />
+        {count > 0 && <span aria-hidden="true" className="absolute -right-1 top-0 min-w-4 rounded bg-primary px-1 text-center text-[10px] font-bold leading-4 text-primary-foreground">{count > 99 ? "99+" : count}</span>}
+      </> : label}
     </Link>
   );
 }
