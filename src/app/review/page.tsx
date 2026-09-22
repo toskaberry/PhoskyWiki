@@ -10,7 +10,10 @@ import { ContentDiff } from "@/components/content-diff";
 import { TermMetadataDiff } from "@/components/term-metadata-diff";
 import { KeyTexts } from "@/components/key-texts";
 import { WikiContent } from "@/components/wiki-content";
-import { renderMarkdown, wikiLinkResolver } from "@/lib/markdown";
+import { getEditorCatalog, type EditorCatalog } from "@/lib/editor-catalog";
+import { getWikiLinkTargets } from "@/lib/content";
+import { pageIdFromKey } from "@/lib/slug";
+import { renderMarkdown, previewWikiLinkResolver } from "@/lib/markdown";
 import { ReviewActions } from "@/components/review-actions";
 import type { QueueItem } from "@/lib/review";
 import type { SubmissionKind } from "@/db/schema";
@@ -27,7 +30,10 @@ const kindLabels: Record<SubmissionKind, string> = {
   new_interpreter: "新建诠释者",
 };
 
-function QueueEntry({ item }: { item: QueueItem }) {
+async function QueueEntry({ item, catalog }: { item: QueueItem; catalog: EditorCatalog }) {
+  const sourceId = item.targetHref ? pageIdFromKey(item.targetHref.split("/").pop() ?? "") : null;
+  const resolvedTargets = sourceId !== null ? await getWikiLinkTargets(sourceId) : undefined;
+  const previewHtml = renderMarkdown(item.content, previewWikiLinkResolver(catalog.targets, resolvedTargets));
   const target =
     item.kind === "edit"
       ? item.targetTitle
@@ -116,7 +122,7 @@ function QueueEntry({ item }: { item: QueueItem }) {
           {item.content && (
             <section aria-label="提案预览" className="rounded-lg border border-border p-4">
               <h3 className="mb-2 text-sm font-medium text-muted-foreground">提案预览</h3>
-              <WikiContent html={renderMarkdown(item.content, wikiLinkResolver(new Map(item.linkTargets)))} />
+              <WikiContent html={previewHtml} />
             </section>
           )}
           {item.staleBase && (
@@ -162,7 +168,7 @@ export default async function ReviewQueuePage() {
     );
   }
 
-  const items = await listQueue();
+  const [items, catalog] = await Promise.all([listQueue(), getEditorCatalog()]);
 
   return (
     <PageContainer className="max-w-4xl">
@@ -183,7 +189,7 @@ export default async function ReviewQueuePage() {
       ) : (
         <ul className="mt-8 flex flex-col gap-4">
           {items.map((item) => (
-            <QueueEntry key={item.id} item={item} />
+            <QueueEntry key={item.id} item={item} catalog={catalog} />
           ))}
         </ul>
       )}

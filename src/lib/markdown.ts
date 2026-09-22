@@ -32,6 +32,19 @@ export function wikiLinkResolver(
   return (ref) => targets.get(wikiLinkKey(ref)) ?? { href: "", exists: false };
 }
 
+/** 未保存正文沿用已解析身份；原红链可从当前公开目录补全。 */
+export function previewWikiLinkResolver(
+  catalogTargets: Iterable<{ key: string; href: string }>,
+  resolvedTargets: Iterable<[string, WikiLinkTarget]> = [],
+): ResolveWikiLink {
+  const targets = new Map<string, WikiLinkTarget>();
+  for (const { key, href } of catalogTargets) targets.set(key, { href, exists: true });
+  for (const [key, target] of resolvedTargets) {
+    if (target.exists || target.unavailable) targets.set(key, target);
+  }
+  return wikiLinkResolver(targets);
+}
+
 /**
  * 用解析结果改写 wikiLink 节点的 hast 输出。
  * remark-wiki-link 自带的 permalinks/exists 机制是「预知全集」式的，

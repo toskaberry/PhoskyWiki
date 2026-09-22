@@ -573,8 +573,8 @@ export function PassageAnnotations({
     if (!root) return;
     const onClick = (event: MouseEvent) => {
       const target = event.target as HTMLElement | null;
-      // 虚线段落在双链文字内时点击仍优先导航（#85/#96：链接压过标记与感想入口）
-      if (target?.closest("a")) return;
+      // Links keep their native navigation even when a marked sentence wraps them.
+      if (target?.closest("a[href]")) return;
       let marker = target?.closest<HTMLElement>(".pw-thought-marker") ?? null;
       while (marker?.parentElement?.closest(".pw-thought-marker")) {
         marker = marker.parentElement.closest<HTMLElement>(".pw-thought-marker");
