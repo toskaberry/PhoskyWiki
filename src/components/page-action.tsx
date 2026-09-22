@@ -8,6 +8,8 @@ const subscribeHydration = () => () => {};
 const clientReady = () => true;
 const serverReady = () => false;
 
+// F11：回滚／软删除／恢复的操作按钮。危险操作（删除词条）内联确认面板，
+// 结果与错误靠近操作；语义（新修订、可恢复）保持不变。
 export function PageAction({ pageId, action, revisionId, deleteTerm }: {
   pageId: number;
   action: "rollback" | "delete" | "restore";
@@ -42,12 +44,12 @@ export function PageAction({ pageId, action, revisionId, deleteTerm }: {
       setPending(false);
     }
   }
-  return <span className="inline-flex flex-col items-start gap-1">
+  return <span className="inline-flex flex-col items-start gap-2">
     <Button type="button" variant="outline" size="sm" disabled={!ready || pending} onClick={() => deleteTerm && action === "delete" ? setConfirming(true) : apply()}>{pending ? "处理中…" : label}</Button>
-    {confirming && <span role="dialog" aria-label="确认删除词条" className="mt-2 flex max-w-lg flex-col gap-3 rounded-md border border-border bg-card p-4 text-sm">
+    {confirming && <span role="dialog" aria-label="确认删除词条" className="flex max-w-lg flex-col gap-3 rounded-lg border border-destructive/40 bg-card p-4 text-sm">
       <span>删除“{deleteTerm!.title}”后，词条及其 {deleteTerm!.perspectiveCount} 个当前可见视角将对全站隐藏。历史保留，可在管理员回收站恢复。</span>
-      <span className="flex gap-2"><Button size="sm" disabled={pending} onClick={apply}>确认删除</Button><Button size="sm" variant="outline" disabled={pending} onClick={() => { setConfirming(false); setError(null); }}>取消</Button></span>
+      <span className="flex flex-wrap gap-2"><Button size="sm" variant="destructive" disabled={pending} onClick={apply}>确认删除</Button><Button size="sm" variant="outline" disabled={pending} onClick={() => { setConfirming(false); setError(null); }}>取消</Button></span>
     </span>}
-    {error && <span role="alert" className="text-sm text-destructive">{error}</span>}
+    {error && <span role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 p-2 text-sm text-destructive [overflow-wrap:anywhere]">{error}</span>}
   </span>;
 }

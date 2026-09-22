@@ -1,6 +1,7 @@
 "use client";
 
 // 版务锁定控件：一个词条一行锁定状态，覆盖该词条总评论、各视角评论与感想回复。
+// F11：小尺寸描边控件，错误靠近操作；措辞与作用范围保持不变。
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -39,21 +40,22 @@ export function TermLockButton({
   }
 
   return (
-    <span className="flex items-center gap-2">
-      {error && (
-        <span role="alert" className="text-xs text-destructive">
-          {error}
-        </span>
-      )}
+    <span className="inline-flex flex-wrap items-center gap-2">
       <button
         type="button"
         onClick={() => void toggle()}
         disabled={pending}
+        aria-busy={pending}
         title={locked ? "解锁后恢复发言" : "锁定后该词条评论区（含各视角）任何角色（含管理员）不能发言"}
-        className="text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline disabled:opacity-50"
+        className="min-h-8 rounded-md border border-border px-2.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-50"
       >
         {pending ? "…" : locked ? labels.unlock : labels.lock}
       </button>
+      {error && (
+        <span role="alert" className="text-xs text-destructive [overflow-wrap:anywhere]">
+          {error}
+        </span>
+      )}
     </span>
   );
 }

@@ -1,6 +1,8 @@
 import { hasAdminRole } from "@/lib/roles";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { PageContainer } from "@/components/page-container";
+import { TaskPageHeader } from "@/components/task-page";
 import { SubmissionForm, type SubmissionFormProps } from "@/components/submission-form";
 import { ContentDiff } from "@/components/content-diff";
 import { TermMetadataDiff } from "@/components/term-metadata-diff";
@@ -56,14 +58,28 @@ export default async function ResubmitPage({ params }: { params: Promise<{ id: s
     if (!interpreterOptions.some(i => i.id === proposal.interpreterId)) { retry.unavailable = `${retry.unavailable ?? ""}原诠释者不可用。`; interpreterOptions.push({ id: proposal.interpreterId!, label: `不可用诠释者 #${proposal.interpreterId}` }); }
     form = { ...common, variant: "new_perspective", terms: termOptions, interpreters: interpreterOptions, presetTermId: proposal.termId, existingPerspectives };
   } else form = { ...common, variant: proposal.kind };
-  return <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-8">
-    <Link href={`/profile/submissions/${id}`} className="text-sm underline">返回原驳回记录 #{id}</Link>
-    <h1 className="my-4 text-2xl font-bold">修改后重新提交</h1>
-    {comparison && <section className="mb-6" aria-label="最新版与原提案">
-      <h2 className="mb-2 text-xl font-semibold">最新版与原提案</h2>
-      <p className="mb-3 text-sm">{retry.stale ? "页面已有新版。请对照下面的最新版与原提案，在表单中人工整理后确认。" : "请结合当前内容修改原提案。"}</p>
+  return <PageContainer className="max-w-4xl">
+    <TaskPageHeader
+      breadcrumb={[
+        { label: "首页", href: "/" },
+        { label: "个人主页", href: "/profile" },
+        { label: "提交详情", href: `/profile/submissions/${id}` },
+        { label: "修改后重新提交" },
+      ]}
+      kicker="编者任务 · 重新提交"
+      title="修改后重新提交"
+      description="驳回理由显示在表单顶部；按既有流程整理内容后再次提交，会创建一条新的提交记录。"
+    />
+    <p className="mt-4 text-sm">
+      <Link href={`/profile/submissions/${id}`} className="text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">
+        返回原驳回记录 #{id}
+      </Link>
+    </p>
+    {comparison && <section className="mb-8 mt-8" aria-label="最新版与原提案">
+      <h2 className="border-t border-border pt-6 text-xl font-semibold tracking-tight">最新版与原提案</h2>
+      <p className="mb-3 mt-2 text-sm text-muted-foreground">{retry.stale ? "页面已有新版。请对照下面的最新版与原提案，在表单中人工整理后确认。" : "请结合当前内容修改原提案。"}</p>
       {comparison}
     </section>}
     <SubmissionForm {...form} />
-  </main>;
+  </PageContainer>;
 }

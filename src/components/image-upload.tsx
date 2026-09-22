@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 
+// F11：上传以明确的「处理中」进度条 + 状态文字表达，失败原因靠近上传入口。
 export function ImageUpload({ onUploaded }: { onUploaded: (src: string) => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -20,11 +21,14 @@ export function ImageUpload({ onUploaded }: { onUploaded: (src: string) => void 
     finally { setBusy(false); }
   }
   return <div className="space-y-2 text-sm">
-    <label className="inline-flex min-h-11 cursor-pointer flex-wrap items-center gap-3 rounded border px-3 py-2">
+    <label className={`inline-flex min-h-11 cursor-pointer flex-wrap items-center gap-3 rounded-md border px-3 py-2 transition-colors ${busy ? "border-input bg-muted/40" : "border-input hover:bg-muted"}`}>
       {busy ? "图片上传中…" : "上传并插入图片"}
       <input aria-label="上传并插入图片" type="file" accept="image/png,image/jpeg,image/webp,image/gif" disabled={busy} className="max-w-full text-xs" onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ""; if (file) void upload(file); }} />
     </label>
+    {busy && (
+      <progress aria-hidden="true" className="pw-upload-progress h-1 w-full max-w-md" />
+    )}
     <p className="text-xs text-muted-foreground">最多 10 MB。编者的图片随正文一起审核；上传后请填写图片说明。</p>
-    {error && <p role="alert" className="text-destructive">{error}</p>}
+    {error && <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 p-2 text-sm text-destructive [overflow-wrap:anywhere]">{error}</p>}
   </div>;
 }
