@@ -50,7 +50,7 @@ function fitCamera(layout: GraphLayout, width: number, height: number, rootId?: 
   const bottom = Math.max(...layout.nodes.map(n => n.y + n.radius)) + 50;
   const root = layout.nodes.find(n => n.id === rootId);
   const x = root?.x ?? (left + right) / 2, y = root?.y ?? (top + bottom) / 2;
-  return { x, y, scale: Math.max(MIN_ZOOM, Math.min(1.2, width / (2 * Math.max(x - left, right - x)), height / (2 * Math.max(y - top, bottom - y)))) };
+  return { x, y, scale: Math.min(1.2, Math.max(1, width) / (2 * Math.max(x - left, right - x)), Math.max(1, height) / (2 * Math.max(y - top, bottom - y))) };
 }
 
 export function GraphCanvas({ data, height, rootId, onNodeClick, onClearSelection, ariaLabel, toolbarLeading, legend, ref }: GraphCanvasProps) {
@@ -73,6 +73,8 @@ export function GraphCanvas({ data, height, rootId, onNodeClick, onClearSelectio
   const travellingToDetail = useRef(false);
   const gesture = useRef<{ pointerId: number; x: number; y: number; camera: GraphCamera; nodeId?: number; nodeX: number; nodeY: number; moved: boolean } | null>(null);
   const layout = result?.source === data ? result.layout : EMPTY;
+  // A narrow canvas may need a smaller scale than the usual zoom floor.
+  const minZoom = useMemo(() => Math.min(MIN_ZOOM, fitCamera(layout, width, height, rootId).scale), [layout, width, height, rootId]);
   const activeId = hovered ?? selected;
   const active = data.nodes.find(n => n.id === activeId);
   const activePosition = layout.nodes.find(n => n.id === activeId);
@@ -204,15 +206,15 @@ export function GraphCanvas({ data, height, rootId, onNodeClick, onClearSelectio
       const box = svg.getBoundingClientRect();
       const px = event.clientX - box.left - box.width / 2, py = event.clientY - box.top - box.height / 2;
       setCamera(c => {
-        const scale = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, c.scale * Math.exp(-event.deltaY * .0015)));
+        const scale = Math.max(Math.min(minZoom, c.scale), Math.min(MAX_ZOOM, c.scale * Math.exp(-event.deltaY * .0015)));
         return { x: c.x + px / c.scale - px / scale, y: c.y + py / c.scale - py / scale, scale };
       });
     };
     svg.addEventListener("wheel", wheel, { passive: false });
     return () => svg.removeEventListener("wheel", wheel);
-  }, []);
+  }, [minZoom]);
 
-  function zoom(factor: number) { setCamera(c => ({ ...c, scale: Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, c.scale * factor)) })); }
+  function zoom(factor: number) { setCamera(c => ({ ...c, scale: Math.max(Math.min(minZoom, c.scale), Math.min(MAX_ZOOM, c.scale * factor)) })); }
 
   return (
     // 研究终端外框（#97）：工具栏 → 图例 → 画布，先说明编码再展示图谱。

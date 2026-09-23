@@ -3,6 +3,33 @@
 
 import { expect, test } from "./fixtures";
 
+test("窄屏适应画布包含全部节点，缩小按钮和滚轮不会反向放大", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 844 });
+  await page.goto("/graph");
+  const canvas = page.getByTestId("graph-canvas");
+  await canvas.locator("[data-node-id]").first().waitFor();
+  await page.getByRole("button", { name: "适应画布" }).click();
+  const clipped = () => canvas.evaluate(element => {
+    const bounds = element.getBoundingClientRect();
+    return [...element.querySelectorAll("[data-node-id]")].filter(node => {
+      const box = node.getBoundingClientRect();
+      return box.left < bounds.left - 1 || box.right > bounds.right + 1 || box.top < bounds.top - 1 || box.bottom > bounds.bottom + 1;
+    }).length;
+  });
+  await expect.poll(clipped).toBe(0);
+  await page.getByRole("button", { name: "缩小图谱" }).click();
+  await expect.poll(clipped).toBe(0);
+  await canvas.locator("svg[data-graph-surface]").dispatchEvent("wheel", { deltaY: 240, clientX: 180, clientY: 700 });
+  await expect.poll(clipped).toBe(0);
+  const node = canvas.locator("[data-node-boundary]").first();
+  const fittedWidth = await node.evaluate(element => element.getBoundingClientRect().width);
+  await page.setViewportSize({ width: 812, height: 844 });
+  await page.getByRole("button", { name: "缩小图谱" }).click();
+  await expect.poll(() => node.evaluate(element => element.getBoundingClientRect().width)).toBeLessThanOrEqual(fittedWidth + .01);
+  await canvas.locator("svg[data-graph-surface]").dispatchEvent("wheel", { deltaY: 240, clientX: 400, clientY: 700 });
+  await expect.poll(() => node.evaluate(element => element.getBoundingClientRect().width)).toBeLessThanOrEqual(fittedWidth + .01);
+});
+
 test("全站图谱页：画布渲染、学派图例、缩放拖拽冒烟", async ({ page }) => {
   await page.goto("/graph");
 
