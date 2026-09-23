@@ -406,7 +406,7 @@ test("双链、红链与三种划线、感想虚线叠加分层可辨：明暗�
       await expect(page.locator("a.wiki-link .pw-mark--underline").first()).toHaveCSS("text-decoration-style", "solid");
       await page.mouse.move(4, 4);
       await link.hover();
-      await expect(page.getByRole("group", { name: "双链预览" })).toBeVisible({ timeout: 3_000 });
+      await expect(page.getByRole("dialog", { name: "双链预览" })).toBeVisible({ timeout: 3_000 });
       await page.mouse.move(4, 4);
 
       // 叠加选文复制：选区横跨链接、划线与虚线，复制到的仍是所选文字

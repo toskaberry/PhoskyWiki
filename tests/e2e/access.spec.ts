@@ -60,6 +60,7 @@ test("管理员签发邀请、编者注册与双人受理，恢复密码使旧�
     await (await openAccountMenu(page)).getByRole("button", { name: "登出" }).click();
     await page.goto("/terms");
     await page.getByRole("link", { name: title, exact: true }).click();
+    await expect(page.getByRole("heading", { level: 1, name: title, exact: true })).toBeVisible();
     await expect(page.getByText("两名管理员受理后可见的词条简介。")).toBeVisible();
     await page.goto("/login");
     await page.getByLabel("邮箱", { exact: true }).fill(email);

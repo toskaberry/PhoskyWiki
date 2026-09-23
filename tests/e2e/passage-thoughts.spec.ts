@@ -5,7 +5,7 @@ import { expect, test, type APIRequestContext, type Page } from "./fixtures";
 import { fixtureRegister } from "./auth-fixture";
 import { cleanupTestContent } from "./content-cleanup";
 import { getDb } from "../../src/db";
-import { pages, passageThoughts, replies, user } from "../../src/db/schema";
+import { pages, passageThoughts, replies, user, userMarkStyle } from "../../src/db/schema";
 
 const content = "第一句包含部分引用。第二句继续讨论。\n\n第三句跨越段落。";
 
@@ -91,6 +91,9 @@ async function setup(page: Page) {
     data: { email: process.env.SEED_ADMIN_EMAIL ?? "admin@phoskywiki.local", password: process.env.SEED_ADMIN_PASSWORD },
   });
   expect(signed.ok()).toBe(true);
+  const { user: account } = await signed.json();
+  // The seed account survives suite reruns; start with the default mark style.
+  await getDb().delete(userMarkStyle).where(eq(userMarkStyle.userId, account.id));
   const suffix = randomUUID();
   const titles = [`想法词条 ${suffix}`, `想法作者 ${suffix}`];
   const term = await submit(page.request, { kind: "new_term", title: titles[0] });
