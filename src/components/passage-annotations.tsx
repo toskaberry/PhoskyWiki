@@ -21,6 +21,7 @@ import { Check, Copy, Highlighter, MessageSquarePlus, Trash2, Underline, Waves }
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { WikiContent } from "@/components/wiki-content";
+import { useReadingPanels } from "@/components/reading-panels";
 import {
   isLocatedMark,
   markStyles,
@@ -30,6 +31,7 @@ import {
   type PersonalMarksState,
 } from "@/lib/mark-styles";
 import {
+  deserializeSelection,
   indexPassage,
   serializeSelection,
   type IndexedPassage,
@@ -355,6 +357,22 @@ export function PassageAnnotations({
   const renderAnnotations = useCallback((markList: PersonalMarkView[], thoughtList: ThoughtView[]) => {
     const root = bodyRoot();
     if (!root) return;
+    // 选区保护（#96）：装饰重包会切分/合并文本节点，恰在切点上的选区边界会被
+    // 浏览器顺移到相邻节点边界——水合完成前就选好的文字会被首次渲染搬走，之后
+    // 的标记/复制就落在错误范围上。先按重包前的索引序列化选区，重包后按新索引
+    // 原回 (节点, 偏移)；选区不在正文内或已折叠时不处理。
+    const selection = document.getSelection();
+    const anchorNode = selection?.anchorNode ?? null;
+    const focusNode = selection?.focusNode ?? null;
+    const held = selection && !selection.isCollapsed && selection.rangeCount > 0 && anchorNode && focusNode
+      && root.contains(anchorNode) && root.contains(focusNode)
+      ? serializeSelection(
+          indexRef.current ?? indexPassage(root),
+          { node: anchorNode, offset: selection.anchorOffset },
+          { node: focusNode, offset: selection.focusOffset },
+          String(revisionId ?? ""),
+        )
+      : null;
     unwrapAnnotations(root);
     const index = indexPassage(root);
     const decorations: Decoration[] = [];
@@ -382,7 +400,17 @@ export function PassageAnnotations({
     }
     renderDecorations(root, index, decorations);
     indexRef.current = indexPassage(root);
-  }, [bodyRoot, sentenceMarkers]);
+    if (held) {
+      const restored = deserializeSelection(indexRef.current, held);
+      if (restored) {
+        // boundaries 的键就是现行 DOM 节点，这里只是让类型回到 DOM 侧
+        selection?.setBaseAndExtent(
+          restored.start.node as Node, restored.start.offset,
+          restored.end.node as Node, restored.end.offset,
+        );
+      }
+    }
+  }, [bodyRoot, revisionId, sentenceMarkers]);
   useEffect(() => { renderAnnotations(marks, thoughts); }, [renderAnnotations, marks, thoughts, html]);
 
   // 个人记录和登录回跳共用 thought-ID：先定位句子，再打开对应面板。
@@ -407,6 +435,35 @@ export function PassageAnnotations({
     window.addEventListener("hashchange", openFromHash);
     return () => window.removeEventListener("hashchange", openFromHash);
   }, [bodyRoot, viewerId]);
+
+  // F07 按需面板（#95）：感想面板渲染在正文列之外（留白/覆盖层），数据与「回到原句」
+  // 定位由本组件提供。仅同步列表与注册回调，不改变既有句子面板、草稿与恢复语义；
+  // 无 Provider（组件独立使用）时桥接为空。
+  const panels = useReadingPanels();
+  useEffect(() => { panels?.syncThoughts(thoughts); }, [panels, thoughts]);
+  const locateForPanel = useCallback((thought: ThoughtView) => {
+    if (isLocatedThought(thought)) {
+      const sentence = indexRef.current?.sentences.find(row => row.start < thought.end && row.end > thought.start);
+      if (!sentence) return;
+      bodyRoot()?.querySelector<HTMLElement>(`[data-sentence-start="${sentence.start}"]`)
+        ?.scrollIntoView({ block: "center" });
+      setChangedOpen(false);
+      setPanelError(null);
+      setPanel({ sentence, own: thought.authorId === viewerId });
+      requestAnimationFrame(() => {
+        const card = document.getElementById(`thought-${thought.id}`);
+        card?.focus({ preventScroll: true });
+        card?.scrollIntoView({ block: "nearest" });
+      });
+    } else {
+      setPanel(null);
+      setChangedOpen(true);
+    }
+  }, [bodyRoot, viewerId]);
+  useEffect(() => {
+    panels?.registerLocate(locateForPanel);
+    return () => panels?.registerLocate(null);
+  }, [locateForPanel, panels]);
 
   useEffect(() => {
     if (!panel && !changedOpen) return;

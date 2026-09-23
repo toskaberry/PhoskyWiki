@@ -7,7 +7,7 @@ import { HighlightStyle, syntaxHighlighting, syntaxTree } from "@codemirror/lang
 import { tags } from "@lezer/highlight";
 import { Compartment, EditorSelection, EditorState, Transaction } from "@codemirror/state";
 import { EditorView, keymap, placeholder } from "@codemirror/view";
-import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useId, useMemo, useRef, useState } from "react";
 
 import { WikiContent } from "@/components/wiki-content";
 import { ImageUpload } from "@/components/image-upload";
@@ -84,9 +84,10 @@ const formats = [
   { label: "双链", before: "[[", after: "]]", fallback: "词条名" },
 ];
 
-export function MarkdownEditor({ value, onChange, resolvedWikiLinks }: {
+export function MarkdownEditor({ value, onChange, resolvedWikiLinks, error }: {
   value: string;
   onChange: (value: string) => void;
+  error?: string;
   /** 该页已有的目标身份优先于当前名称目录，包括暂不可用的已解析目标。 */
   resolvedWikiLinks?: [string, WikiLinkTarget][];
 }) {
@@ -94,6 +95,8 @@ export function MarkdownEditor({ value, onChange, resolvedWikiLinks }: {
   const view = useRef<EditorView | null>(null);
   const initialValue = useRef(value);
   const completionConfig = useRef(new Compartment());
+  const validationConfig = useRef(new Compartment());
+  const errorId = useId();
   const [catalog, setCatalog] = useState<EditorCatalog | null>(null);
   const [catalogError, setCatalogError] = useState(false);
   const [reload, setReload] = useState(0);
@@ -119,6 +122,7 @@ export function MarkdownEditor({ value, onChange, resolvedWikiLinks }: {
         extensions: [
           markdown(), history(), syntaxHighlighting(editorHighlightStyle),
           completionConfig.current.of([]),
+          validationConfig.current.of([]),
           keymap.of([...defaultKeymap, ...historyKeymap]),
           EditorView.lineWrapping, editorTheme,
           placeholder("支持 [[词条名]] 与 [[词条名|视角@诠释者]]"),
@@ -132,6 +136,12 @@ export function MarkdownEditor({ value, onChange, resolvedWikiLinks }: {
     view.current = editor;
     return () => { view.current = null; editor.destroy(); };
   }, []);
+
+  useEffect(() => {
+    view.current?.dispatch({ effects: validationConfig.current.reconfigure(
+      error ? EditorView.contentAttributes.of({ "aria-invalid": "true", "aria-describedby": errorId }) : [],
+    ) });
+  }, [error, errorId]);
 
   useEffect(() => {
     const editor = view.current;
@@ -173,12 +183,16 @@ export function MarkdownEditor({ value, onChange, resolvedWikiLinks }: {
     if (!catalog) return null;
     return renderMarkdown(value, previewWikiLinkResolver(catalog.targets, resolvedWikiLinks));
   }, [value, catalog, resolvedWikiLinks]);
-  const buttonClass = "min-h-11 rounded px-3 text-sm hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring";
+  const buttonClass = "min-h-11 rounded px-3 text-sm transition-colors hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring";
 
   return (
-    <div className="min-w-0 space-y-3">
-      <p className="text-sm font-medium">正文（Markdown）</p>
-      <div className="overflow-hidden rounded-md border border-border">
+    <div className="min-w-0 border-t border-border pt-6">
+      <h2 className="text-lg font-semibold tracking-tight">正文（Markdown）</h2>
+      <p className="mt-1 text-sm text-muted-foreground">
+        以 Markdown 撰写视角正文；下方即时预览，双链与红链按站内规则解析。
+      </p>
+      {error && <p id={errorId} role="alert" data-testid="form-error" className="mt-2 text-sm text-destructive">{error}</p>}
+      <div className="mt-4 overflow-hidden rounded-lg border border-border">
         <div role="group" aria-label="Markdown 工具栏" className="flex flex-wrap gap-1 border-b border-border bg-muted/40 p-1">
           {formats.map(({ label, before, after, fallback }) => (
             <button key={label} type="button" onClick={() => insert(before, after, fallback)} className={buttonClass}>
@@ -190,18 +204,25 @@ export function MarkdownEditor({ value, onChange, resolvedWikiLinks }: {
         </div>
         <div ref={host} />
       </div>
-      <p className="text-xs text-muted-foreground">输入 [[ 补全词条；Tab 移至下一个控件。</p>
-      <ImageUpload onUploaded={(src) => insert("![", `](${src})`, "图片说明")} />
-      <section aria-label="实时预览" className="min-w-0 rounded-md border border-border p-4 [overflow-wrap:anywhere]">
-        <h2 className="mb-3 text-sm font-medium text-muted-foreground">实时预览</h2>
-        {catalogError ? (
-          <p role="status" className="text-sm text-destructive">
-            词条目录加载失败，补全和预览暂不可用；正文仍可编辑和提交。
-            <button type="button" onClick={() => setReload((count) => count + 1)} className="ml-2 min-h-11 underline">重试加载</button>
-          </p>
-        ) : html === null ? (
-          <p role="status" className="text-sm text-muted-foreground">正在加载词条目录…</p>
-        ) : value ? <WikiContent html={html} /> : <p className="text-sm text-muted-foreground">输入正文后在这里预览。</p>}
+      <p className="mt-2 text-xs text-muted-foreground">输入 [[ 补全词条；Tab 移至下一个控件。</p>
+      <div className="mt-3">
+        <ImageUpload onUploaded={(src) => insert("![", `](${src})`, "图片说明")} />
+      </div>
+      <section aria-label="实时预览" className="mt-6 min-w-0 overflow-hidden rounded-lg border border-border">
+        <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-border bg-muted/40 px-4 py-2.5">
+          <h3 className="text-sm font-medium text-muted-foreground">实时预览</h3>
+          <p className="text-xs text-muted-foreground">与读路径同一渲染；链接悬停／聚焦显示下划线</p>
+        </div>
+        <div className="p-4 [overflow-wrap:anywhere]">
+          {catalogError ? (
+            <div role="status" className="text-sm text-destructive">
+              <p>词条目录加载失败，补全和预览暂不可用；正文仍可编辑和提交。</p>
+              <button type="button" onClick={() => setReload((count) => count + 1)} className="mt-1 min-h-11 underline">重试加载</button>
+            </div>
+          ) : html === null ? (
+            <p role="status" className="text-sm text-muted-foreground">正在加载词条目录…</p>
+          ) : value ? <WikiContent html={html} /> : <p className="text-sm text-muted-foreground">输入正文后在这里预览。</p>}
+        </div>
       </section>
     </div>
   );

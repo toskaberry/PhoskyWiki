@@ -24,17 +24,17 @@ export default async function CategoryPage({ params }: Params) {
   return (
     <PageContainer>
       <nav aria-label="面包屑" className="mb-6 flex flex-wrap items-center gap-y-2 break-words text-sm text-muted-foreground">
-        <Link href="/" className="min-w-0 break-words hover:text-foreground">
+        <Link href="/" className="min-w-0 break-words py-1 hover:text-foreground">
           首页
         </Link>
         <span className="mx-1.5">/</span>
-        <Link href="/categories" className="min-w-0 break-words hover:text-foreground">
+        <Link href="/categories" className="min-w-0 break-words py-1 hover:text-foreground">
           分类
         </Link>
         {category.path.map((ancestor) => (
           <span key={ancestor.id} className="contents">
             <span className="mx-1.5">/</span>
-            <Link href={categoryPath(ancestor.slug)} className="min-w-0 break-words hover:text-foreground">
+            <Link href={categoryPath(ancestor.slug)} className="min-w-0 break-words py-1 hover:text-foreground">
               {ancestor.name}
             </Link>
           </span>

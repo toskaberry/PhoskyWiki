@@ -3,17 +3,20 @@
 // 编辑/新建提议经同一审核流提交；正文使用 CodeMirror 编辑器。
 // 草稿在客户端 localStorage 自动保存（ADR-0004 #6：服务端只见 pending）；
 // 管理员提交不经审核直接生效（ADR-0004 #9）。
+// F11：表单按「任务上下文 → 归属 → 信息 → 正文 → 提交」统一层级组织，
+// 字段错误就地反馈；提交错误、冲突与进度靠近提交操作，保持既有语义。
 
 import Link from "next/link";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { MarkdownEditor } from "@/components/markdown-editor";
+import { Callout, StatusChip } from "@/components/task-page";
 import type { CreateSubmissionResult } from "@/lib/review-types";
 import type { WikiLinkTarget } from "@/lib/markdown";
 import { KeyTextsEditor } from "@/components/key-texts";
-import type { KeyText } from "@/lib/key-texts";
+import { KeyTextValidationError, parseKeyTexts, type KeyText } from "@/lib/key-texts";
 import type { MetadataSnapshot } from "@/lib/revision-snapshot";
 import { formatAliasInput, parseAliasInput } from "@/lib/alias-input";
 
@@ -22,6 +25,9 @@ type Option = {
   label: string;
 };
 const NO_ALIASES: string[] = [];
+type FieldError =
+  | { field: "title" | "aliases" | "term" | "interpreter" | "content"; message: string }
+  | { field: "keyTexts"; error: KeyTextValidationError };
 
 /**
  * 正文字段的本地草稿：与它所基于的页面修订绑定（ADR-0004 #6 草稿在客户端；
@@ -64,6 +70,19 @@ export type SubmissionFormProps = { resubmission?: {
       existingPerspectives: { termId: number; interpreterId: number }[];
     });
 
+/** 表单内的分组区块：细线之上的区块标题 + 字段列。 */
+function FormSection({ title, description, children }: { title: string; description?: ReactNode; children: ReactNode }) {
+  return (
+    <section className="border-t border-border pt-6">
+      <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
+      {description != null && (
+        <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{description}</p>
+      )}
+      <div className="mt-4 flex flex-col gap-5">{children}</div>
+    </section>
+  );
+}
+
 export function SubmissionForm(props: SubmissionFormProps) {
   const { variant, isAdmin } = props;
   const retry = props.resubmission;
@@ -77,7 +96,7 @@ export function SubmissionForm(props: SubmissionFormProps) {
         ? "phoskywiki:draft:new-perspective"
         : variant === "new_term"
           ? "phoskywiki:draft:new-term-metadata"
-        : "phoskywiki:draft:new-interpreter";
+          : "phoskywiki:draft:new-interpreter";
 
   const [content, setContent] = useState(
     retry ? retry.proposal.content : variant === "edit" ? props.initialContent : "",
@@ -97,6 +116,14 @@ export function SubmissionForm(props: SubmissionFormProps) {
   );
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fieldError, setFieldError] = useState<FieldError | null>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+  useEffect(() => {
+    if (fieldError) formRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
+  }, [fieldError]);
+  function clearFieldError(field: FieldError["field"]) {
+    setFieldError(current => current?.field === field ? null : current);
+  }
   const [existingHref, setExistingHref] = useState<string | null>(null);
   const [result, setResult] = useState<CreateSubmissionResult | null>(null);
   const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null);
@@ -163,11 +190,39 @@ export function SubmissionForm(props: SubmissionFormProps) {
     if (duplicatePerspective || (needsConfirmation && !confirmed) || (retry?.unavailable && variant !== "new_perspective")) return;
     try { window.localStorage.setItem(draftKey, draftSnapshot); } catch { /* Storage may be unavailable. */ }
     setError(null);
+    setFieldError(null);
     setExistingHref(null);
+    if (variant === "new_perspective" && !termId) {
+      setFieldError({ field: "term", message: "缺少目标词条" });
+      return;
+    }
+    if (variant === "new_perspective" && !interpreterId) {
+      setFieldError({ field: "interpreter", message: "缺少诠释者" });
+      return;
+    }
+    if ((variant === "new_perspective" || variant === "edit") && !content.trim()) {
+      setFieldError({ field: "content", message: "正文不能为空" });
+      return;
+    }
+    if ((metadataEdit || variant === "new_term" || variant === "new_interpreter") && !title.trim()) {
+      setFieldError({ field: "title", message: "标题不能为空" });
+      return;
+    }
     const parsedAliases = parseAliasInput(aliases);
     if ((metadataEdit || variant === "new_term") && parsedAliases.error) {
-      setError(parsedAliases.error);
+      setFieldError({ field: "aliases", message: parsedAliases.error });
       return;
+    }
+    if ((variant === "edit_term" || variant === "new_term") && parsedAliases.aliases && parsedAliases.aliases.length > 50) {
+      setFieldError({ field: "aliases", message: "别名最多 50 项" });
+      return;
+    }
+    if (metadataEdit || variant === "new_term" || variant === "new_interpreter") {
+      try { parseKeyTexts(keyTexts); } catch (error) {
+        if (error instanceof KeyTextValidationError) setFieldError({ field: "keyTexts", error });
+        else setError(error instanceof Error ? error.message : "关键文本格式错误");
+        return;
+      }
     }
     setPending(true);
     const payload =
@@ -216,51 +271,88 @@ export function SubmissionForm(props: SubmissionFormProps) {
     return (
       <div
         data-testid="submit-success"
-        className="rounded-lg border border-border bg-card p-6 text-sm"
+        className="rounded-lg border border-border bg-card p-6"
       >
+        <p className="flex items-center gap-2 text-base font-medium">
+          <StatusChip tone="accent">{result.outcome === "pending" ? "等待审核" : "已生效"}</StatusChip>
+          {result.outcome === "pending" ? "已提交，等待审核。" : "已直接生效（管理员提交不经审核）。"}
+        </p>
         {result.outcome === "pending" ? (
-          <>
-            <p className="font-medium">已提交，等待审核。</p>
-            <p className="mt-2 text-muted-foreground">
-              需 {result.quorum} 位管理员受理后生效；可在个人主页查看提交进度与审核结果。
-            </p>
-            <Link href="/profile" className="mt-2 inline-block text-primary underline-offset-4 hover:underline">
+          <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+            需 {result.quorum} 位管理员受理后生效；可在个人主页查看提交进度与审核结果。
+          </p>
+        ) : null}
+        <div className="mt-4 border-t border-border pt-4 text-sm">
+          {result.outcome === "pending" ? (
+            <Link href="/profile" className="inline-block text-primary underline-offset-4 hover:underline">
               查看提交历史 →
             </Link>
-          </>
-        ) : (
-          <>
-            <p className="font-medium">已直接生效（管理员提交不经审核）。</p>
+          ) : (
             <Link
               href={result.href}
-              className="mt-2 inline-block text-primary underline-offset-4 hover:underline"
+              className="inline-block text-primary underline-offset-4 hover:underline"
             >
               查看页面 →
             </Link>
-          </>
-        )}
+          )}
+        </div>
       </div>
     );
   }
 
+  const selectClass = "h-9 rounded-md border border-input bg-background px-3 text-sm font-normal outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
+
   return (
-    <form onSubmit={onSubmit} className="flex flex-col gap-5" noValidate>
-      {retry && <p className="text-sm">驳回理由：<span>{retry.reason}</span></p>}
-      {retry?.unavailable && <p role="alert">{retry.unavailable} 草稿会保留；请等待恢复{variant === "new_perspective" ? "或调整词条与诠释者" : "后再重提"}。</p>}
-      {needsConfirmation && <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={confirmed} onChange={e => setConfirmed(e.target.checked)} />我已对照最新版与原提案，人工整理并确认本次内容</label>}
-      {needsConfirmation && !retry && <details open className="rounded border p-3"><summary>最新版（请与下方保留的草稿对照）</summary><pre className="whitespace-pre-wrap">{variant === "edit" ? props.initialContent : metadataEdit ? JSON.stringify(props.initialMetadata, null, 2) : ""}</pre></details>}
+    <form ref={formRef} onSubmit={onSubmit} className="flex flex-col gap-8" noValidate>
+      {(retry || needsConfirmation) && (
+        <section aria-label="重新提交上下文" className="flex flex-col gap-3">
+          {retry && (
+            <Callout tone="warning" title="驳回理由">
+              <span className="whitespace-pre-wrap break-words">{retry.reason}</span>
+            </Callout>
+          )}
+          {retry?.unavailable && (
+            <Callout tone="danger" role="alert">
+              {retry.unavailable} 草稿会保留；请等待恢复{variant === "new_perspective" ? "或调整词条与诠释者" : "后再重提"}。
+            </Callout>
+          )}
+          {needsConfirmation && (
+            <Callout tone="warning" title="页面在提交后已有新的修订">
+              <label className="flex min-h-11 items-start gap-3 text-sm">
+                <input
+                  type="checkbox"
+                  checked={confirmed}
+                  onChange={(e) => setConfirmed(e.target.checked)}
+                  className="mt-0.5 size-4 shrink-0"
+                />
+                我已对照最新版与原提案，人工整理并确认本次内容
+              </label>
+              {needsConfirmation && !retry && (
+                <details open className="mt-2 rounded border border-border bg-background p-3">
+                  <summary className="cursor-pointer text-sm">最新版（请与下方保留的草稿对照）</summary>
+                  <pre className="mt-2 whitespace-pre-wrap break-words font-mono text-xs leading-5">{variant === "edit" ? props.initialContent : metadataEdit ? JSON.stringify(props.initialMetadata, null, 2) : ""}</pre>
+                </details>
+              )}
+            </Callout>
+          )}
+        </section>
+      )}
+
       {variant === "new_perspective" && (
-        <>
+        <FormSection
+          title="归属"
+          description="视角 =「诠释者 × 词条」的一次完整诠释，同一组合只能有一个视角。"
+        >
           <label className="flex flex-col gap-2 text-sm font-medium">
             所属词条
             <select
               name="term"
               required
               value={termId}
-              onChange={(e) => { setTermId(e.target.value); setError(null); }}
-              aria-invalid={duplicatePerspective}
-              aria-describedby={duplicatePerspective ? "perspective-conflict" : undefined}
-              className="h-9 rounded-md border border-border bg-background px-3 text-sm font-normal outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              onChange={(e) => { setTermId(e.target.value); setError(null); clearFieldError("term"); }}
+              aria-invalid={duplicatePerspective || fieldError?.field === "term"}
+              aria-describedby={duplicatePerspective ? "perspective-conflict" : fieldError?.field === "term" ? "term-error" : undefined}
+              className={selectClass}
             >
               <option value="">选择词条…</option>
               {props.terms.map((term) => (
@@ -269,6 +361,7 @@ export function SubmissionForm(props: SubmissionFormProps) {
                 </option>
               ))}
             </select>
+            {fieldError?.field === "term" && <span id="term-error" role="alert" data-testid="form-error" className="text-sm font-normal text-destructive">{fieldError.message}</span>}
           </label>
           <label className="flex flex-col gap-2 text-sm font-medium">
             诠释者
@@ -276,10 +369,10 @@ export function SubmissionForm(props: SubmissionFormProps) {
               name="interpreter"
               required
               value={interpreterId}
-              onChange={(e) => { setInterpreterId(e.target.value); setError(null); }}
-              aria-invalid={duplicatePerspective}
-              aria-describedby={duplicatePerspective ? "perspective-conflict" : undefined}
-              className="h-9 rounded-md border border-border bg-background px-3 text-sm font-normal outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              onChange={(e) => { setInterpreterId(e.target.value); setError(null); clearFieldError("interpreter"); }}
+              aria-invalid={duplicatePerspective || fieldError?.field === "interpreter"}
+              aria-describedby={duplicatePerspective ? "perspective-conflict" : fieldError?.field === "interpreter" ? "interpreter-error" : undefined}
+              className={selectClass}
             >
               <option value="">选择诠释者…</option>
               {props.interpreters.map((interpreter) => (
@@ -288,84 +381,98 @@ export function SubmissionForm(props: SubmissionFormProps) {
                 </option>
               ))}
             </select>
+            {fieldError?.field === "interpreter" && <span id="interpreter-error" role="alert" data-testid="form-error" className="text-sm font-normal text-destructive">{fieldError.message}</span>}
           </label>
           <p className="text-xs text-muted-foreground">
             视角标题按「诠释者论词条」自动生成（如「德勒兹论主体性」）。
           </p>
           {duplicatePerspective && (
-            <p id="perspective-conflict" role="alert" className="text-sm text-destructive">
+            <p id="perspective-conflict" role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
               该诠释者在此词条下已有视角，请编辑已有视角；若已删除，请联系管理员恢复。
             </p>
           )}
-        </>
+        </FormSection>
       )}
 
       {(variant === "new_term" || variant === "new_interpreter" || metadataEdit) && (
-        <label className="flex flex-col gap-2 text-sm font-medium">
-          {variant === "new_term" || variant === "edit_term" ? "词条标题" : "诠释者名称"}
-          <Input
-            name="title"
-            type="text"
-            required
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder={
-              variant === "new_term" || variant === "edit_term"
-                ? "如「物化」；不同领域或含义请在同一视角内分章"
-                : "如「卢卡奇」"
-            }
-          />
-        </label>
-      )}
-
-      {(variant === "new_term" || variant === "new_interpreter" || metadataEdit) && (
-        <label className="flex flex-col gap-2 text-sm font-medium">
-          一句话简介（信息框用）
-          <Input
-            name="summary"
-            type="text"
-            value={summary}
-            onChange={(e) => setSummary(e.target.value)}
-            placeholder="列表页与信息框展示的一句话"
-          />
-        </label>
-      )}
-
-      {(variant === "new_term" || variant === "edit_term") && (
-        <>
+        <FormSection
+          title={variant === "new_term" || variant === "edit_term" ? "词条信息" : "诠释者信息"}
+          description={
+            variant === "new_term"
+              ? "词条仅保存导航信息，创建后可另行添加具名诠释者的视角。"
+              : undefined
+          }
+        >
           <label className="flex flex-col gap-2 text-sm font-medium">
-            别名（信息框用，以逗号分隔）
-            <Input name="aliases" value={aliases} onChange={(e) => setAliases(e.target.value)} aria-describedby="aliases-help" />
+            {variant === "new_term" || variant === "edit_term" ? "词条标题" : "诠释者名称"}
+            <Input
+              name="title"
+              type="text"
+              required
+              value={title}
+              onChange={(e) => { setTitle(e.target.value); clearFieldError("title"); }}
+              aria-invalid={fieldError?.field === "title" || undefined}
+              aria-describedby={fieldError?.field === "title" ? "submission-title-error" : undefined}
+              placeholder={
+                variant === "new_term" || variant === "edit_term"
+                  ? "如「物化」；不同领域或含义请在同一视角内分章"
+                  : "如「卢卡奇」"
+              }
+            />
+            {fieldError?.field === "title" && <span id="submission-title-error" role="alert" data-testid="form-error" className="text-sm font-normal text-destructive">{fieldError.message}</span>}
           </label>
-          <p id="aliases-help" className="text-xs text-muted-foreground">以中英文逗号分隔，顿号属于别名内容。含逗号的单个别名用英文双引号包住，例如 <code>{'"Alpha, Beta",甲、乙'}</code>；引号内用 <code>{'\\"'}</code> 表示双引号、<code>{'\\\\'}</code> 表示反斜杠。</p>
-          {variant === "new_term" && <p className="text-sm text-muted-foreground">词条仅保存导航信息。创建后可另行添加具名诠释者的视角。</p>}
-        </>
+
+          <label className="flex flex-col gap-2 text-sm font-medium">
+            一句话简介（信息框用）
+            <Input
+              name="summary"
+              type="text"
+              value={summary}
+              onChange={(e) => setSummary(e.target.value)}
+              placeholder="列表页与信息框展示的一句话"
+            />
+          </label>
+
+          {(variant === "new_term" || variant === "edit_term") && (
+            <>
+              <label className="flex flex-col gap-2 text-sm font-medium">
+                别名（信息框用，以逗号分隔）
+                <Input name="aliases" value={aliases} onChange={(e) => { setAliases(e.target.value); clearFieldError("aliases"); }} aria-invalid={fieldError?.field === "aliases" || undefined} aria-describedby={fieldError?.field === "aliases" ? "aliases-help aliases-error" : "aliases-help"} />
+                {fieldError?.field === "aliases" && <span id="aliases-error" role="alert" data-testid="form-error" className="text-sm font-normal text-destructive">{fieldError.message}</span>}
+              </label>
+              <p id="aliases-help" className="text-xs leading-relaxed text-muted-foreground">以中英文逗号分隔，顿号属于别名内容。含逗号的单个别名用英文双引号包住，例如 <code>{'"Alpha, Beta",甲、乙'}</code>；引号内用 <code>{'\\"'}</code> 表示双引号、<code>{'\\\\'}</code> 表示反斜杠。</p>
+            </>
+          )}
+          <KeyTextsEditor value={keyTexts} onChange={value => { setKeyTexts(value); clearFieldError("keyTexts"); }} error={fieldError?.field === "keyTexts" ? fieldError.error : undefined} />
+        </FormSection>
       )}
-      {(metadataEdit || variant === "new_term" || variant === "new_interpreter") && <KeyTextsEditor value={keyTexts} onChange={setKeyTexts} />}
+
       {(variant === "edit" || variant === "new_perspective") && (
-        <MarkdownEditor value={content} onChange={setContent} resolvedWikiLinks={variant === "edit" ? props.resolvedWikiLinks : undefined} />
+        <MarkdownEditor value={content} onChange={value => { setContent(value); clearFieldError("content"); }} error={fieldError?.field === "content" ? fieldError.message : undefined} resolvedWikiLinks={variant === "edit" ? props.resolvedWikiLinks : undefined} />
       )}
 
-      {error && (
-        <p data-testid="form-error" role="alert" className="text-sm text-destructive">
-          {error}
-          {existingHref && <Link href={existingHref} className="ml-2 underline">前往已有页面</Link>}
-        </p>
-      )}
-
-      <div className="flex flex-wrap items-center gap-3">
-        <Button type="submit" size="lg" disabled={pending || duplicatePerspective || (needsConfirmation && !confirmed) || Boolean(retry?.unavailable && variant !== "new_perspective")}>
-          {pending ? "提交中…" : isAdmin ? "提交（直接生效）" : "提交审核"}
-        </Button>
-        {draftKey && draftSavedAt && savedDraft === draftSnapshot && !pending && (
-          <span className="text-xs text-muted-foreground">草稿已自动保存 {draftSavedAt}</span>
+      <section aria-label="提交" className="flex flex-col gap-4 border-t border-border pt-6">
+        {error && (
+          <Callout tone="danger" data-testid="form-error" role="alert">
+            <span className="[overflow-wrap:anywhere]">{error}</span>
+            {existingHref && <Link href={existingHref} className="ml-2 underline">前往已有页面</Link>}
+          </Callout>
         )}
-      </div>
-      <p className="text-xs text-muted-foreground">
-        {isAdmin
-          ? "管理员提交不经审核，直接产生修订并重建双链。"
-          : "提交进入审核队列，受理后内容才会出现在读路径。草稿自动保存在浏览器本地。"}
-      </p>
+
+        <div className="flex flex-wrap items-center gap-3">
+          <Button type="submit" size="lg" disabled={pending || duplicatePerspective || (needsConfirmation && !confirmed) || Boolean(retry?.unavailable && variant !== "new_perspective")}>
+            {pending ? "提交中…" : isAdmin ? "提交（直接生效）" : "提交审核"}
+          </Button>
+          {draftKey && draftSavedAt && savedDraft === draftSnapshot && !pending && (
+            <span className="text-xs text-muted-foreground">草稿已自动保存 {draftSavedAt}</span>
+          )}
+        </div>
+        <p className="text-xs leading-relaxed text-muted-foreground">
+          {isAdmin
+            ? "管理员提交不经审核，直接产生修订并重建双链。"
+            : "提交进入审核队列，受理后内容才会出现在读路径。草稿自动保存在浏览器本地。"}
+        </p>
+      </section>
     </form>
   );
 }

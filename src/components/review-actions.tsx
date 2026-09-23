@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { StatusChip } from "@/components/task-page";
 import type { ReviewOutcome } from "@/lib/review-types";
 
 export function ReviewActions({ submissionId }: { submissionId: number }) {
@@ -59,17 +60,19 @@ export function ReviewActions({ submissionId }: { submissionId: number }) {
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <Button disabled={pending} onClick={() => post("approve")}>
           {pending ? "处理中…" : "受理"}
         </Button>
         <Button
           variant="destructive"
           disabled={pending}
+          aria-expanded={rejecting}
           onClick={() => setRejecting((value) => !value)}
         >
           驳回…
         </Button>
+        <span className="text-xs text-muted-foreground">驳回必填理由，任一驳回即终态</span>
         {error && (
           <p data-testid="review-error" role="alert" className="text-sm text-destructive">
             {error}
@@ -77,17 +80,17 @@ export function ReviewActions({ submissionId }: { submissionId: number }) {
         )}
       </div>
       {rejecting && (
-        <div className="flex flex-col gap-2 rounded-md border border-border p-3">
+        <div className="flex flex-col gap-3 rounded-lg border border-destructive/40 bg-card p-4">
           <label className="text-sm font-medium">
             驳回理由（必填，提交者可见）
             <textarea
               value={reason}
               onChange={(e) => setReason(e.target.value)}
-              className="mt-2 flex min-h-20 w-full resize-y rounded-md border border-border bg-background px-3 py-2 text-sm font-normal outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              className="mt-2 flex min-h-20 w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm font-normal outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
               placeholder="说明哪里需要修改，便于提交者修改后重新提交"
             />
           </label>
-          <div>
+          <div className="flex flex-wrap items-center gap-3">
             <Button
               variant="destructive"
               disabled={pending || reason.trim().length === 0}
@@ -95,6 +98,7 @@ export function ReviewActions({ submissionId }: { submissionId: number }) {
             >
               确认驳回
             </Button>
+            <StatusChip tone="warning">提交者会看到这条理由</StatusChip>
           </div>
         </div>
       )}

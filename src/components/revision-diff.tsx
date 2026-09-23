@@ -39,13 +39,16 @@ export function RevisionDiff({ oldText, newText }: { oldText: string; newText: s
     }
   }
   return (
-    <div className="overflow-x-auto rounded-md border border-border" data-testid="revision-diff">
+    <div className="overflow-x-auto rounded-lg border border-border" data-testid="revision-diff">
       <table className="w-full min-w-96 table-fixed text-left font-mono text-sm">
         <caption className="sr-only">修订差异：左侧起始修订，右侧目标修订。减号表示删除，加号表示新增。</caption>
-        <thead className="bg-muted"><tr><th scope="col" className="p-3">起始修订</th><th scope="col" className="p-3">目标修订</th></tr></thead>
+        <thead className="border-b border-border bg-muted/40 text-xs tracking-wide"><tr>
+          <th scope="col" className="p-3 font-medium">起始修订</th>
+          <th scope="col" className="p-3 font-medium">目标修订</th>
+        </tr></thead>
         <tbody>
-          {rows.map((row, i) => <tr key={i}><DiffCell cell={row.left} /><DiffCell cell={row.right} /></tr>)}
-          {!rows.length && <tr><td colSpan={2} className="p-3">两侧正文均为空。</td></tr>}
+          {rows.map((row, i) => <tr key={i} className="border-b border-border/60 last:border-b-0"><DiffCell cell={row.left} /><DiffCell cell={row.right} /></tr>)}
+          {!rows.length && <tr><td colSpan={2} className="p-3 text-muted-foreground">两侧正文均为空。</td></tr>}
         </tbody>
       </table>
     </div>
@@ -54,7 +57,7 @@ export function RevisionDiff({ oldText, newText }: { oldText: string; newText: s
 
 function DiffCell({ cell }: { cell?: Cell }) {
   return (
-    <td data-diff={cell?.type} className={cn("border-r border-border p-2 align-top whitespace-pre-wrap break-words [overflow-wrap:anywhere]",
+    <td data-diff={cell?.type} className={cn("w-1/2 border-r border-border/60 p-2 align-top whitespace-pre-wrap break-words [overflow-wrap:anywhere] last:border-r-0",
       cell?.type === "del" && "bg-red-500/10",
       cell?.type === "add" && "bg-green-500/10",
     )}>

@@ -66,6 +66,28 @@ async function compactCard(page: Page) {
   }))).toBe(false);
 }
 
+test("同一双链只挂载一张预览，点击入口不被另一张浮卡遮挡", async ({ page, sample }) => {
+  await page.goto(sample.source.href);
+  await bodyLink(page).hover();
+  await expect(card(page)).toContainText("词条简介");
+  // 同时覆盖旧全局预览与正文预览共存的整合回归，不能只按一种 role 计数。
+  await expect(page.locator('[aria-label="双链预览"]')).toHaveCount(1);
+  const paragraph = page.locator(".wiki-content p").first();
+  const box = (await paragraph.boundingBox())!;
+  await page.mouse.move(box.x + 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await expect(card(page)).toBeHidden();
+  await page.mouse.move(box.x + 100, box.y + box.height / 2, { steps: 4 });
+  await page.mouse.up();
+  expect(await page.evaluate(() => getSelection()?.toString().length)).toBeGreaterThan(0);
+  await page.evaluate(() => getSelection()?.removeAllRanges());
+  await page.mouse.move(0, 0);
+  await bodyLink(page).hover();
+  await expect(card(page)).toContainText("词条简介");
+  await card(page).getByRole("link", { name: /查看全部/ }).click();
+  await expect(page).toHaveURL(new RegExp(`${sample.term.pageId}$`));
+});
+
 test("蓝色正文链接保留强调，小浮卡显示词条简介与两个视角 @cross-browser", async ({ page, sample }) => {
   await page.goto(sample.source.href);
   const link = bodyLink(page);
@@ -191,7 +213,17 @@ test("公开预览接口限制摘录，不泄露提案或不可见目标，并�
   expect([...term.excerpt].length).toBeLessThanOrEqual(151);
   expect(term.perspectives).toHaveLength(2);
   expect(term.perspectiveCount).toBe(3);
+  const legacyResponse = await page.request.get(`/api/pages/${sample.term.pageId}/preview`);
+  expect(legacyResponse.headers()["cache-control"]).toContain("no-store");
+  const legacy = await legacyResponse.json();
+  expect(legacy).toEqual({ kind: "term", title: term.title, summary: term.excerpt, perspectives: term.perspectives });
+  expect(legacy.perspectives.every((entry: { interpreterName: string }) => sample.names.includes(entry.interpreterName))).toBe(true);
+  const missingLegacy = await page.request.get("/api/pages/2147483648/preview");
+  expect(missingLegacy.status()).toBe(404);
+  expect(missingLegacy.headers()["cache-control"]).toContain("no-store");
   const perspective = await read(sample.perspectives[0].pageId);
+  const legacyPerspective = await (await page.request.get(`/api/pages/${sample.perspectives[0].pageId}/preview`)).json();
+  expect(legacyPerspective).toEqual({ kind: "perspective", title: perspective.title, interpreterName: perspective.interpreterName, excerpt: perspective.excerpt });
   expect(perspective.interpreterName).toBe(sample.names[0]);
   expect(perspective.excerpt).toContain("原有正文");
   expect(perspective.excerpt).not.toMatch(/\*\*|https:\/\//);

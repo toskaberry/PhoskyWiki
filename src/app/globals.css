@@ -208,6 +208,10 @@
   overflow-wrap: anywhere;
 }
 
+.wiki-content strong {
+  font-weight: 700;
+}
+
 .wiki-content :where(h1, h2, h3, h4, h5, h6, cite, figcaption),
 .reading-meta {
   font-family: var(--font-ui);
@@ -231,6 +235,9 @@
 .wiki-content a.wiki-link:hover,
 .wiki-content a.wiki-link:focus-visible {
   text-decoration-line: underline;
+  /* 上面 text-decoration 简写会把粗细重置回 auto，这里在出下划线时重新给全：
+     悬停下划线加粗到 0.09em 并贴字（0.1em），与个人划线（0.2em+）错开纵距（#96） */
+  text-decoration-thickness: 0.09em;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -243,9 +250,14 @@
 }
 
 /* Markdown 渲染器输出的 wiki-link（src/lib/markdown.ts）。
-   蓝色双链不额外加粗，悬停／键盘聚焦时显示下划线（#85）；红链保留缺口标记。 */
+   蓝色双链不额外加粗，悬停／键盘聚焦时显示下划线（#85）；红链保留缺口标记。
+   下划线纵向阶梯（#96）：可跳转链接的悬停下划线最贴文字，个人划线在其下方，
+   红链／暂不可用缺口线保持内容盒底边，公共感想虚线在最外——多层同现时各行错开。 */
 .wiki-content .wiki-link {
-  @apply text-primary underline-offset-4;
+  @apply text-primary;
+  text-underline-offset: 0.1em;
+  text-decoration-thickness: 0.09em;
+  text-decoration-skip-ink: none;
 }
 
 .wiki-content a.wiki-link:focus-visible {
@@ -264,41 +276,55 @@
 }
 
 /* 个人标记三样式（spec 0009 #72，components/passage-annotations.tsx 动态包裹）。
-   高光为马克笔式半透明底色；实线/波浪线用 text-decoration，与行内链接样式互不干扰。 */
+   高光为马克笔式半透明底色；实线/波浪线用 text-decoration，与行内链接样式互不干扰。
+   划线行落在链接悬停下划线（0.1em）与红链边框（内容盒底）之间；叠加时逐层可辨。
+   各属性须显式写全：text-decoration-* 与 underline-offset 都是继承属性，否则会
+   吃到外层链接或内层虚线的值。 */
 .wiki-content .pw-mark--highlight {
   background: oklch(0.9 0.16 98 / 0.55);
   border-radius: 0.125rem;
 }
 .wiki-content .pw-mark--underline {
   text-decoration-line: underline;
+  text-decoration-style: solid;
   text-decoration-color: oklch(0.72 0.16 70);
   text-decoration-thickness: 2px;
-  text-underline-offset: 3px;
+  text-underline-offset: 0.2em;
+  text-decoration-skip-ink: none;
 }
 .wiki-content .pw-mark--squiggle {
-  text-decoration-line: underline wavy;
+  text-decoration-line: underline;
+  text-decoration-style: wavy;
   text-decoration-color: oklch(0.72 0.16 70);
   text-decoration-thickness: 1px;
-  text-underline-offset: 4px;
+  text-underline-offset: 0.22em;
+  text-decoration-skip-ink: none;
 }
 .dark .wiki-content .pw-mark--highlight {
-  background: oklch(0.75 0.14 90 / 0.3);
+  /* 深色主题压低不透明度：高光上仍要保持深色链接 #9BADFF 对混合底 ≥4.5:1 */
+  background: oklch(0.75 0.14 90 / 0.26);
 }
 
 /* 感想句子虚线（spec 0009 #73/#74）：公开感想统一灰虚线、本人感想红色虚线；
-   与个人标记叠加时虚线垫底（渲染顺序），两者都显示。可点击打开该句想法面板。 */
+   虚线画在 0.42em——低于个人划线与红链／暂不可用的内容盒底边框，多层叠加时
+   垫在最外不遮蔽链接与划线，也避免与它们在同一条带上互相盖字。可点击打开该句想法面板。 */
 .wiki-content .pw-thought-marker {
   cursor: pointer;
-  border-bottom: 1px dashed oklch(0.62 0.02 260);
+  text-decoration-line: underline;
+  text-decoration-style: dashed;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.42em;
+  text-decoration-skip-ink: none;
+  text-decoration-color: oklch(0.62 0.02 260);
 }
 .wiki-content .pw-thought-marker[data-own="true"] {
-  border-bottom-color: oklch(0.58 0.2 25);
+  text-decoration-color: oklch(0.58 0.2 25);
 }
 .dark .wiki-content .pw-thought-marker {
-  border-bottom-color: oklch(0.72 0.02 260);
+  text-decoration-color: oklch(0.72 0.02 260);
 }
 .dark .wiki-content .pw-thought-marker[data-own="true"] {
-  border-bottom-color: oklch(0.7 0.18 25);
+  text-decoration-color: oklch(0.7 0.18 25);
 }
 
 /* 选区浮条（微信读书式）：默认样式按钮描边强调，指向尖角贴选区一侧。 */
@@ -324,6 +350,29 @@
   bottom: auto;
   top: -4px;
   transform: translateX(-50%) rotate(225deg);
+}
+
+/* 图片上传的不确定进度条（F11）：细线高度 + 主题色；浏览器自带 indeterminate 动画，
+   减少动态效果时由上方全局规则收敛为静止。 */
+.pw-upload-progress {
+  appearance: none;
+  -moz-appearance: none;
+  border: none;
+  border-radius: 9999px;
+  background: var(--muted);
+  color: var(--primary);
+}
+.pw-upload-progress::-webkit-progress-bar {
+  border-radius: 9999px;
+  background: var(--muted);
+}
+.pw-upload-progress::-webkit-progress-value {
+  border-radius: 9999px;
+  background: var(--primary);
+}
+.pw-upload-progress::-moz-progress-bar {
+  border-radius: 9999px;
+  background: var(--primary);
 }
 
 /* The preview lives outside wiki-content, so it cannot enter annotation text indexes. */

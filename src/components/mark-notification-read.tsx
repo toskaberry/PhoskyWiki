@@ -31,7 +31,7 @@ export function MarkNotificationRead({ submissionId }: { submissionId: number })
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <Button type="button" variant="outline" size="sm" disabled={pending} onClick={markRead}>
+      <Button type="button" variant="outline" size="sm" className="min-h-9" disabled={pending} aria-busy={pending} onClick={markRead}>
         {pending ? "标记中…" : "标为已读"}
       </Button>
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}

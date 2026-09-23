@@ -4,14 +4,18 @@
 
 import "server-only";
 
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 import type { Db } from "@/db";
 import { links, pages, perspectives } from "@/db/schema";
+import { isPageVisible } from "@/lib/page-visibility";
+import type { WikiLinkTarget } from "@/lib/markdown";
+import { pagePath } from "@/lib/slug";
 import { parseWikiLinks, wikiLinkKey, type ParsedWikiLink } from "@/lib/wiki-links";
 
 type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
+type Reader = Db | Tx;
 
 /**
  * 重建一页的全部真实双链：仍出现在正文的已解析名称键沿用目标 id，
@@ -46,7 +50,7 @@ export async function rebuildPageLinks(
 }
 
 async function resolveLinkTarget(
-  tx: Tx,
+  tx: Reader,
   ref: ParsedWikiLink,
 ): Promise<number | null> {
   if (ref.interpreter === null) {
@@ -85,4 +89,52 @@ async function resolveLinkTarget(
     )
     .limit(1);
   return row?.id ?? null;
+}
+
+/**
+ * 未保存正文（编辑预览、审核提案预览）的双链落点，读路径版 rebuildPageLinks：
+ * 既有 links 行按名称沿用目标身份（改名、旧名复用、暂不可用都不换目标），
+ * 新键按名称解析；可见性与 getWikiLinkTargets 同口径。只读，不落库。
+ */
+export async function resolvePreviewWikiLinks(
+  db: Reader,
+  pageId: number | null,
+  content: string,
+): Promise<Map<string, WikiLinkTarget>> {
+  const refs = parseWikiLinks(content);
+  if (refs.length === 0) return new Map();
+
+  const preserved = pageId === null ? new Map<string, number | null>() : new Map(
+    (await db
+      .select({ name: links.targetName, id: links.targetPageId })
+      .from(links)
+      .where(eq(links.sourcePageId, pageId)))
+      .map((link) => [link.name, link.id]),
+  );
+  const targetIds = await Promise.all(
+    refs.map((ref) => preserved.get(wikiLinkKey(ref)) ?? resolveLinkTarget(db, ref)),
+  );
+
+  const uniqueIds = [...new Set(targetIds.filter((id): id is number => id !== null))];
+  const rows = uniqueIds.length
+    ? await db
+        .select({ id: pages.id, type: pages.type, slug: pages.slug, visible: isPageVisible(pages.id) })
+        .from(pages)
+        .where(inArray(pages.id, uniqueIds))
+    : [];
+  const pageById = new Map(rows.map((row) => [row.id, row]));
+
+  return new Map(
+    refs.map((ref, index) => {
+      const id = targetIds[index];
+      const row = id !== null ? pageById.get(id) : undefined;
+      const exists = row !== undefined && row.visible;
+      return [
+        wikiLinkKey(ref),
+        exists
+          ? { href: pagePath(row.type!, row.slug!, row.id), exists: true }
+          : { href: "", exists: false, ...(id !== null ? { unavailable: true } : {}) },
+      ];
+    }),
+  );
 }

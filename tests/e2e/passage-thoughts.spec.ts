@@ -1,13 +1,19 @@
 import "dotenv/config";
 import { randomUUID } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { expect, test, type APIRequestContext, type Page } from "./fixtures";
 import { fixtureRegister } from "./auth-fixture";
 import { cleanupTestContent } from "./content-cleanup";
 import { getDb } from "../../src/db";
-import { replies, user } from "../../src/db/schema";
+import { pages, passageThoughts, replies, user, userMarkStyle } from "../../src/db/schema";
 
 const content = "第一句包含部分引用。第二句继续讨论。\n\n第三句跨越段落。";
+
+/** 「拉康论主体性」视角（种子里固定存在）：第三段正文含可跳转双链与红链。 */
+async function lacanPerspective() {
+  const [row] = await getDb().select().from(pages).where(eq(pages.title, "拉康论主体性"));
+  return { id: row.id, href: `/perspective/${row.slug}-${row.id}` };
+}
 
 test("个人记录回到原句，游客互动登录后回到感想，管理员可处置公开内容", async ({ page, browser }) => {
   test.skip(!process.env.SEED_ADMIN_PASSWORD, "需要种子管理员密码");
@@ -85,6 +91,9 @@ async function setup(page: Page) {
     data: { email: process.env.SEED_ADMIN_EMAIL ?? "admin@phoskywiki.local", password: process.env.SEED_ADMIN_PASSWORD },
   });
   expect(signed.ok()).toBe(true);
+  const { user: account } = await signed.json();
+  // The seed account survives suite reruns; start with the default mark style.
+  await getDb().delete(userMarkStyle).where(eq(userMarkStyle.userId, account.id));
   const suffix = randomUUID();
   const titles = [`想法词条 ${suffix}`, `想法作者 ${suffix}`];
   const term = await submit(page.request, { kind: "new_term", title: titles[0] });
@@ -260,4 +269,60 @@ test("失败保留想法草稿，旧修订明确确认后提交，失定位想�
     await expect(panel).toContainText("原文已变化");
     await expect(panel.getByRole("link", { name: "查看原修订" })).toHaveAttribute("href", `/history/${source.pageId}?from=${source.revision}&to=${source.revision}`);
   } finally { await cleanupTestContent(source.titles, page.request); }
+});
+
+// #96 叠加验收：公共感想虚线与双链同句共存——虚线的非链接区段仍是感想入口，
+// 双链文字内的点击优先导航，不为链接内的虚线段打开想法面板。
+test("句子虚线与双链叠加：点双链优先导航，虚线非链接区段打开想法面板", async ({ page, browser }) => {
+  const { id: pageId, href } = await lacanPerspective();
+  const otherEmail = `thought-link-${randomUUID()}@example.com`;
+  const otherContext = await browser.newContext();
+  let otherUserId = "";
+  try {
+    expect((await fixtureRegister(otherContext.request, { data: { name: "叠加感想读者", email: otherEmail, password: "thought-link-password" } })).ok()).toBe(true);
+    const [otherAccount] = await getDb().select({ id: user.id }).from(user).where(eq(user.email, otherEmail));
+    otherUserId = otherAccount.id;
+    const other = await otherContext.newPage();
+    await other.goto(href);
+    await writeThought(other, "词条下阿尔都塞的视角", "公共感想：镜像式误认的参照。");
+    await otherContext.close();
+
+    // 游客视角：该句出现公共灰虚线；点虚线的非链接区段打开想法面板
+    await page.goto(href);
+    const marker = page.locator(".pw-thought-marker").filter({ hasText: "可参照" });
+    await expect(marker.first()).toHaveAttribute("data-own", "false");
+    const afterLink = await page.evaluate(() => {
+      const root = document.querySelector(".wiki-content")!;
+      const needle = "词条下阿尔都塞的视角";
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        const text = node.nodeValue ?? "";
+        const index = text.indexOf(needle);
+        if (index >= 0) {
+          const range = document.createRange();
+          range.setStart(node, index);
+          range.setEnd(node, index + needle.length);
+          const rect = range.getBoundingClientRect();
+          return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+        }
+      }
+      return null;
+    });
+    expect(afterLink, "正文中找不到虚线的非链接区段").not.toBeNull();
+    await page.mouse.click(afterLink!.x, afterLink!.y);
+    const panel = page.getByRole("dialog", { name: "句子想法" });
+    await expect(panel).toContainText("公共感想：镜像式误认的参照。");
+    await panel.getByRole("button", { name: "关闭想法面板" }).click();
+
+    // 虚线覆盖下的双链：点击仍优先导航（不落成想法面板）
+    await page.locator(".wiki-content").getByRole("link", { name: "意识形态", exact: true }).click();
+    await expect(page).toHaveURL(/\/term\//);
+    await expect(page.getByRole("heading", { level: 1, name: "意识形态" })).toBeVisible();
+  } finally {
+    if (otherUserId) {
+      await getDb().delete(passageThoughts).where(and(eq(passageThoughts.pageId, pageId), eq(passageThoughts.authorId, otherUserId)));
+    }
+    await otherContext.close();
+    await getDb().delete(user).where(eq(user.email, otherEmail));
+  }
 });

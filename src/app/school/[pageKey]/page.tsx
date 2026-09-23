@@ -37,8 +37,8 @@ export default async function SchoolPage({ params }: Params) {
   return (
     <PageContainer>
       <nav aria-label="面包屑" className="mb-6 flex flex-wrap items-center gap-x-2 gap-y-2 break-words text-sm text-muted-foreground">
-        <Link href="/" className="hover:text-foreground">首页</Link><span>/</span>
-        <Link href="/schools" className="hover:text-foreground">学派</Link><span>/</span>
+        <Link href="/" className="py-1 hover:text-foreground">首页</Link><span>/</span>
+        <Link href="/schools" className="py-1 hover:text-foreground">学派</Link><span>/</span>
         <span aria-current="page" className="min-w-0 break-words">{school.title}</span>
       </nav>
       <DiscoveryHeader label="思想脉络 / 学派档案" title={school.title}>

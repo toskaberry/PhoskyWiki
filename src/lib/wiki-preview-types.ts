@@ -5,6 +5,6 @@ export interface WikiPreview {
   href: string;
   excerpt: string;
   interpreterName?: string;
-  perspectives: Array<{ title: string; href: string }>;
+  perspectives: Array<{ title: string; href: string; interpreterName: string }>;
   perspectiveCount: number;
 }

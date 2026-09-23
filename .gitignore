@@ -25,6 +25,7 @@
 !/playwright.config.ts
 !/playwright.wiki-preview.config.ts
 !/playwright.r2.config.ts
+!/playwright.targeted.config.ts
 !/Dockerfile
 !/Dockerfile.backup
 !/docker-compose.yml

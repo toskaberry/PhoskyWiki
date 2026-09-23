@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useId, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Maximize, ZoomIn, ZoomOut } from "lucide-react";
 import { moveGraphNode, type GraphLayout } from "@/lib/graph-layout";
 import { UNSCHOOLED_COLOR, UNSCHOOLED_LABEL, type GraphNode, type SiteGraphData } from "@/lib/graph-types";
 import { GraphScene } from "./graph-scene";
@@ -13,6 +14,10 @@ export interface GraphCanvasProps {
   onNodeClick?: (node: GraphNode) => void;
   onClearSelection?: () => void;
   ariaLabel: string;
+  /** 工具栏前段：全站图谱的搜索定位、局部图谱的跳数切换等页面专属控件。 */
+  toolbarLeading?: ReactNode;
+  /** 工具栏与画布之间的图例（学派配色与视觉编码说明）。 */
+  legend?: ReactNode;
   ref?: React.Ref<GraphCanvasHandle>;
 }
 export interface GraphCamera { x: number; y: number; scale: number }
@@ -45,10 +50,10 @@ function fitCamera(layout: GraphLayout, width: number, height: number, rootId?: 
   const bottom = Math.max(...layout.nodes.map(n => n.y + n.radius)) + 50;
   const root = layout.nodes.find(n => n.id === rootId);
   const x = root?.x ?? (left + right) / 2, y = root?.y ?? (top + bottom) / 2;
-  return { x, y, scale: Math.max(MIN_ZOOM, Math.min(1.2, width / (2 * Math.max(x - left, right - x)), height / (2 * Math.max(y - top, bottom - y)))) };
+  return { x, y, scale: Math.min(1.2, Math.max(1, width) / (2 * Math.max(x - left, right - x)), Math.max(1, height) / (2 * Math.max(y - top, bottom - y))) };
 }
 
-export function GraphCanvas({ data, height, rootId, onNodeClick, onClearSelection, ariaLabel, ref }: GraphCanvasProps) {
+export function GraphCanvas({ data, height, rootId, onNodeClick, onClearSelection, ariaLabel, toolbarLeading, legend, ref }: GraphCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const detailRef = useRef<HTMLDivElement>(null);
@@ -68,6 +73,8 @@ export function GraphCanvas({ data, height, rootId, onNodeClick, onClearSelectio
   const travellingToDetail = useRef(false);
   const gesture = useRef<{ pointerId: number; x: number; y: number; camera: GraphCamera; nodeId?: number; nodeX: number; nodeY: number; moved: boolean } | null>(null);
   const layout = result?.source === data ? result.layout : EMPTY;
+  // A narrow canvas may need a smaller scale than the usual zoom floor.
+  const minZoom = useMemo(() => Math.min(MIN_ZOOM, fitCamera(layout, width, height, rootId).scale), [layout, width, height, rootId]);
   const activeId = hovered ?? selected;
   const active = data.nodes.find(n => n.id === activeId);
   const activePosition = layout.nodes.find(n => n.id === activeId);
@@ -199,79 +206,95 @@ export function GraphCanvas({ data, height, rootId, onNodeClick, onClearSelectio
       const box = svg.getBoundingClientRect();
       const px = event.clientX - box.left - box.width / 2, py = event.clientY - box.top - box.height / 2;
       setCamera(c => {
-        const scale = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, c.scale * Math.exp(-event.deltaY * .0015)));
+        const scale = Math.max(Math.min(minZoom, c.scale), Math.min(MAX_ZOOM, c.scale * Math.exp(-event.deltaY * .0015)));
         return { x: c.x + px / c.scale - px / scale, y: c.y + py / c.scale - py / scale, scale };
       });
     };
     svg.addEventListener("wheel", wheel, { passive: false });
     return () => svg.removeEventListener("wheel", wheel);
-  }, []);
+  }, [minZoom]);
 
-  function zoom(factor: number) { setCamera(c => ({ ...c, scale: Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, c.scale * factor)) })); }
+  function zoom(factor: number) { setCamera(c => ({ ...c, scale: Math.max(Math.min(minZoom, c.scale), Math.min(MAX_ZOOM, c.scale * factor)) })); }
 
   return (
-    <div ref={containerRef} data-testid="graph-canvas" data-located={located ?? undefined} className="relative w-full overflow-hidden" style={{ height }} onPointerLeave={() => {
-      travellingToDetail.current = false;
-      if (hovered !== null) scheduleHoverDeparture();
-    }} onPointerMoveCapture={event => {
-      const box = event.currentTarget.getBoundingClientRect();
-      const inside = hoverCorridor.current !== null && isInsideCorridor({ x: event.clientX - box.left, y: event.clientY - box.top }, hoverCorridor.current);
-      const wasTravelling = travellingToDetail.current;
-      travellingToDetail.current = inside;
-      if (inside) cancelHoverDeparture();
-      else if (wasTravelling && hovered !== null) scheduleHoverDeparture();
-    }}>
-      <svg ref={svgRef} data-graph-surface="true" role="group" aria-label={ariaLabel} viewBox={`0 0 ${width} ${height}`} className="h-full w-full touch-none select-none"
-        onPointerDown={event => {
-          if (event.button !== 0) return;
-          const id = (event.target as Element).closest("[data-node-id]")?.getAttribute("data-node-id");
-          const node = id === undefined || id === null ? undefined : layout.nodes.find(n => n.id === Number(id));
-          if (!node) clearSelection();
-          gesture.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, camera, nodeId: node?.id, nodeX: node?.x ?? 0, nodeY: node?.y ?? 0, moved: false };
-          if (node) setSelected(node.id);
-          event.currentTarget.setPointerCapture(event.pointerId);
-        }}
-        onPointerMove={event => {
-          const g = gesture.current;
-          if (!g || g.pointerId !== event.pointerId) return;
-          const dx = event.clientX - g.x, dy = event.clientY - g.y;
-          if (!g.moved && Math.hypot(dx, dy) < 4) return;
-          g.moved = true;
-          if (g.nodeId !== undefined) {
-            setResult(current => current?.source === data ? { ...current, layout: moveGraphNode(current.layout, g.nodeId!, g.nodeX + dx / g.camera.scale, g.nodeY + dy / g.camera.scale) } : current);
-          } else setCamera({ ...g.camera, x: g.camera.x - dx / g.camera.scale, y: g.camera.y - dy / g.camera.scale });
-        }}
-        onPointerUp={event => {
-          const g = gesture.current;
-          if (!g || g.pointerId !== event.pointerId) return;
-          gesture.current = null;
-          // Pointer capture retargets click to the SVG; use the original gesture
-          // target, and never navigate after a drag.
-          if (!g.moved && event.pointerType !== "touch") {
-            const node = data.nodes.find(n => n.id === g.nodeId);
-            if (node) onNodeClick?.(node);
-          }
-        }}
-        onPointerCancel={() => { gesture.current = null; }}
+    // 研究终端外框（#97）：工具栏 → 图例 → 画布，先说明编码再展示图谱。
+    <div className="w-full overflow-hidden rounded-lg border border-border bg-card text-card-foreground">
+      <div
+        className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border px-3 py-2"
+        role="group"
+        aria-label="图谱工具栏"
+        data-testid="graph-toolbar"
       >
-        <GraphScene data={data} layout={layout} camera={camera} width={width} height={height} gradientId={gradientId} activeId={activeId} neighbors={neighbors}
-          onHover={handleHover} onSelect={setSelected} onOpen={node => onNodeClick?.(node)} />
-      </svg>
-      {result?.source !== data && !failed && <span role="status" className="absolute inset-0 grid place-content-center text-sm text-muted-foreground">正在排列词条…</span>}
-      {failed && <div role="status" className="absolute inset-0 grid place-content-center gap-2 bg-card text-sm"><p>图谱布局载入失败。</p><button onClick={() => { setFailed(false); setRetry(n => n + 1); }} className="rounded border px-3 py-1">重试布局</button></div>}
-      {active && <div ref={detailRef} role="region" aria-label="词条关联详情" tabIndex={0} onPointerEnter={() => { travellingToDetail.current = false; hoverCorridor.current = null; cancelHoverDeparture(); }} onPointerLeave={scheduleHoverDeparture} style={{ top: detailAtTop ? 12 : undefined, bottom: detailAtTop ? undefined : 48, maxHeight: height / 2 - 64 }} className="absolute left-3 max-w-[calc(100%-1.5rem)] overflow-y-auto rounded-md border border-border bg-popover/95 p-3 text-xs text-popover-foreground shadow-sm">
-        <strong className="block max-w-md break-words text-sm">{active.title}</strong>
-        <div className="mt-1 flex max-w-lg flex-wrap gap-x-3 gap-y-1">
-          {active.schoolAffinities.length ? active.schoolAffinities.map(a => <span key={a.schoolId}><span className="mr-1 inline-block size-2 rounded-full" style={{ backgroundColor: schools.get(a.schoolId)?.color ?? UNSCHOOLED_COLOR }} />{schools.get(a.schoolId)?.title} · {a.count} 个视角</span>) : <span>{UNSCHOOLED_LABEL}</span>}
+        {toolbarLeading}
+        <div className="ml-auto flex shrink-0 items-center gap-1" role="group" aria-label="图谱视口">
+          <button type="button" onClick={() => zoom(1 / 1.3)} aria-label="缩小图谱" className="inline-flex size-11 items-center justify-center rounded border border-border bg-background text-foreground transition-colors hover:bg-muted"><ZoomOut aria-hidden="true" className="size-4" /></button>
+          <button type="button" onClick={() => zoom(1.3)} aria-label="放大图谱" className="inline-flex size-11 items-center justify-center rounded border border-border bg-background text-foreground transition-colors hover:bg-muted"><ZoomIn aria-hidden="true" className="size-4" /></button>
+          <button type="button" onClick={() => { clearSelection(); setCamera(fitCamera(layout, width, height, rootId)); }} className="inline-flex min-h-11 items-center gap-1.5 rounded border border-border bg-background px-2.5 text-sm text-foreground transition-colors hover:bg-muted"><Maximize aria-hidden="true" className="size-4" />适应画布</button>
         </div>
-        <p className="mt-1">双链热度 {active.heat} · {active.perspectiveCount} 个视角</p>
-        {active.schoolAffinities.length > 1 && <p className="mt-1 text-muted-foreground">学派成员视角可交叉计数，不表示概念归属比例。</p>}
-        <button type="button" onClick={() => onNodeClick?.(active)} className="mt-2 underline underline-offset-2">进入词条</button>
-      </div>}
-      <div className="absolute bottom-3 right-3 flex gap-1" role="group" aria-label="图谱视口">
-        <button type="button" onClick={() => zoom(1.3)} aria-label="放大图谱" className="rounded border bg-background px-2.5 py-1.5 text-sm">＋</button>
-        <button type="button" onClick={() => zoom(1 / 1.3)} aria-label="缩小图谱" className="rounded border bg-background px-2.5 py-1.5 text-sm">−</button>
-        <button type="button" onClick={() => { clearSelection(); setCamera(fitCamera(layout, width, height, rootId)); }} className="rounded border bg-background px-2.5 py-1.5 text-sm">适应画布</button>
+      </div>
+      {legend}
+      <div ref={containerRef} data-testid="graph-canvas" data-located={located ?? undefined} className="relative w-full overflow-hidden" style={{ height }} onPointerLeave={() => {
+        travellingToDetail.current = false;
+        if (hovered !== null) scheduleHoverDeparture();
+      }} onPointerMoveCapture={event => {
+        const box = event.currentTarget.getBoundingClientRect();
+        const inside = hoverCorridor.current !== null && isInsideCorridor({ x: event.clientX - box.left, y: event.clientY - box.top }, hoverCorridor.current);
+        const wasTravelling = travellingToDetail.current;
+        travellingToDetail.current = inside;
+        if (inside) cancelHoverDeparture();
+        else if (wasTravelling && hovered !== null) scheduleHoverDeparture();
+      }}>
+        <svg ref={svgRef} data-graph-surface="true" role="group" aria-label={ariaLabel} viewBox={`0 0 ${width} ${height}`} className="h-full w-full touch-none select-none"
+          onPointerDown={event => {
+            if (event.button !== 0) return;
+            const id = (event.target as Element).closest("[data-node-id]")?.getAttribute("data-node-id");
+            const node = id === undefined || id === null ? undefined : layout.nodes.find(n => n.id === Number(id));
+            if (!node) clearSelection();
+            gesture.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, camera, nodeId: node?.id, nodeX: node?.x ?? 0, nodeY: node?.y ?? 0, moved: false };
+            if (node) setSelected(node.id);
+            event.currentTarget.setPointerCapture(event.pointerId);
+          }}
+          onPointerMove={event => {
+            const g = gesture.current;
+            if (!g || g.pointerId !== event.pointerId) return;
+            const dx = event.clientX - g.x, dy = event.clientY - g.y;
+            if (!g.moved && Math.hypot(dx, dy) < 4) return;
+            g.moved = true;
+            if (g.nodeId !== undefined) {
+              setResult(current => current?.source === data ? { ...current, layout: moveGraphNode(current.layout, g.nodeId!, g.nodeX + dx / g.camera.scale, g.nodeY + dy / g.camera.scale) } : current);
+            } else setCamera({ ...g.camera, x: g.camera.x - dx / g.camera.scale, y: g.camera.y - dy / g.camera.scale });
+          }}
+          onPointerUp={event => {
+            const g = gesture.current;
+            if (!g || g.pointerId !== event.pointerId) return;
+            gesture.current = null;
+            // Pointer capture retargets click to the SVG; use the original gesture
+            // target, and never navigate after a drag.
+            if (!g.moved && event.pointerType !== "touch") {
+              const node = data.nodes.find(n => n.id === g.nodeId);
+              if (node) onNodeClick?.(node);
+            }
+          }}
+          onPointerCancel={() => { gesture.current = null; }}
+        >
+          <GraphScene data={data} layout={layout} camera={camera} width={width} height={height} gradientId={gradientId} activeId={activeId} neighbors={neighbors}
+            onHover={handleHover} onSelect={setSelected} onOpen={node => onNodeClick?.(node)} />
+        </svg>
+        {result?.source !== data && !failed && <span role="status" className="absolute inset-0 grid place-content-center text-sm text-muted-foreground">正在排列词条…</span>}
+        {failed && <div role="status" className="absolute inset-0 grid place-content-center gap-2 bg-card text-sm"><p>图谱布局载入失败。</p><button onClick={() => { setFailed(false); setRetry(n => n + 1); }} className="rounded border px-3 py-1">重试布局</button></div>}
+        {active && <div ref={detailRef} role="region" aria-label="词条关联详情" tabIndex={0} onPointerEnter={() => { travellingToDetail.current = false; hoverCorridor.current = null; cancelHoverDeparture(); }} onPointerLeave={scheduleHoverDeparture} style={{ top: detailAtTop ? 12 : undefined, bottom: detailAtTop ? undefined : 48, maxHeight: height / 2 - 64 }} className="absolute left-3 w-[min(20rem,calc(100%-1.5rem))] overflow-y-auto rounded-md border border-border bg-popover/95 text-popover-foreground shadow-md backdrop-blur-sm">
+          <div className="border-b border-border px-3 py-2">
+            <strong className="block break-words text-sm leading-snug">{active.title}</strong>
+          </div>
+          <div className="px-3 py-2 text-xs leading-relaxed">
+            <div className="flex max-w-lg flex-wrap gap-x-3 gap-y-1">
+              {active.schoolAffinities.length ? active.schoolAffinities.map(a => <span key={a.schoolId} className="min-w-0 break-words"><span className="mr-1 inline-block size-2 rounded-full align-middle" style={{ backgroundColor: schools.get(a.schoolId)?.color ?? UNSCHOOLED_COLOR }} />{schools.get(a.schoolId)?.title} · {a.count} 个视角</span>) : <span>{UNSCHOOLED_LABEL}</span>}
+            </div>
+            <p className="mt-1.5 font-mono">双链热度 {active.heat} · {active.perspectiveCount} 个视角</p>
+            {active.schoolAffinities.length > 1 && <p className="mt-1 text-muted-foreground">学派成员视角可交叉计数，不表示概念归属比例。</p>}
+            <button type="button" onClick={() => onNodeClick?.(active)} className="mt-2.5 inline-flex min-h-9 items-center rounded border border-primary/45 bg-background px-2.5 text-primary underline-offset-4 transition-colors hover:bg-accent hover:underline">进入词条</button>
+          </div>
+        </div>}
       </div>
     </div>
   );
