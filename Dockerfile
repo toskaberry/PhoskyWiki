@@ -1,5 +1,5 @@
 # Exact versions are intentional; updates must rerun the container acceptance job.
-FROM node:24.14.0-bookworm-slim@sha256:d8e448a56fc63242f70026718378bd4b00f8c82e78d20eefb199224a4d8e33d8 AS dependencies
+FROM node:26.12.0-bookworm-slim@sha256:298992629d69bbd5b2b03ad57094d8e4fcb3a8eeb7c4e25d29de656519568913 AS dependencies
 WORKDIR /app
 RUN npm install --global pnpm@10.30.3
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
@@ -14,7 +14,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 # the runtime stage must load its own protected configuration.
 RUN mkdir -p public && test -n "$APP_REVISION" && BETTER_AUTH_SECRET=build-only-placeholder-never-a-runtime-secret BETTER_AUTH_URL=http://build.invalid pnpm build
 
-FROM node:24.14.0-bookworm-slim@sha256:d8e448a56fc63242f70026718378bd4b00f8c82e78d20eefb199224a4d8e33d8 AS runtime
+FROM node:26.12.0-bookworm-slim@sha256:298992629d69bbd5b2b03ad57094d8e4fcb3a8eeb7c4e25d29de656519568913 AS runtime
 WORKDIR /app
 ENV NODE_ENV=production PHOSKYWIKI_ENV=production NEXT_TELEMETRY_DISABLED=1 HOSTNAME=0.0.0.0 PORT=3000
 ARG APP_REVISION
